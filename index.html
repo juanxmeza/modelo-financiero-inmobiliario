@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modelo Financiero Inmobiliario — Colombia</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f3;color:#0b0b0b;font-size:14px}
+:root{
+  --surface-0:#f5f5f3;--surface-1:#fafaf8;--surface-2:#ffffff;
+  --border:rgba(11,11,11,0.10);--border-strong:rgba(11,11,11,0.18);
+  --text-primary:#0b0b0b;--text-secondary:#52514e;--text-muted:#898781;
+  --text-accent:#185fa5;--bg-accent:#e6f1fb;--border-accent:#85b7eb;
+  --radius:8px;
+}
+@media(prefers-color-scheme:dark){:root{
+  --surface-0:#111110;--surface-1:#1a1a19;--surface-2:#242422;
+  --border:rgba(255,255,255,0.10);--border-strong:rgba(255,255,255,0.18);
+  --text-primary:#ffffff;--text-secondary:#c3c2b7;--text-muted:#898781;
+  --text-accent:#3987e5;--bg-accent:#0c1f35;--border-accent:#1d4f8a;
+}}
+.app{display:grid;grid-template-columns:320px 1fr;min-height:100vh}
+.sb{background:var(--surface-1);border-right:.5px solid var(--border);overflow-y:auto;padding:0 0 2rem}
+.sbh{padding:.75rem 1rem .6rem;border-bottom:.5px solid var(--border);position:sticky;top:0;background:var(--surface-1);z-index:10}
+.sbh-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sbh-t{font-size:10px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em}
+.cur-toggle{display:flex;align-items:center;gap:4px}
+.cur-btn{padding:2px 9px;font-size:11px;font-weight:600;border-radius:5px;border:.5px solid var(--border);cursor:pointer;background:transparent;color:var(--text-secondary);transition:all .15s}
+.cur-btn.active{background:#2a78d6;color:#fff;border-color:#2a78d6}
+.cur-btn:hover:not(.active){background:var(--surface-0)}
+.trm-row{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-muted);display:none}
+.trm-row input{width:75px;font-size:10px;padding:2px 5px;border:.5px solid var(--border);border-radius:4px;background:var(--surface-0);color:var(--text-primary);text-align:right}
+.trm-row input:focus{outline:none;border-color:#2a78d6}
+.sg{padding:.7rem 1rem .4rem;border-bottom:.5px solid var(--border)}
+.sl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:.5rem;display:flex;align-items:center;gap:5px}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.db{background:#2a78d6}.dg{background:#1baf7a}.da{background:#eda100}.dv{background:#4a3aa7}.dr{background:#e34948}.dp{background:#d4537e}.dc{background:#0ea5e9}
+.f{margin-bottom:.45rem}
+.f label{font-size:11px;color:var(--text-secondary);display:flex;justify-content:space-between;margin-bottom:2px}
+.f label span.val{color:var(--text-accent);font-weight:500}
+.f input[type=range]{width:100%;accent-color:#2a78d6;cursor:pointer}
+.main{overflow-y:auto;padding:.9rem}
+.kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:.75rem}
+.kpi{background:var(--surface-1);border-radius:9px;padding:.6rem .75rem;border:.5px solid var(--border)}
+.kl{font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;line-height:1.3}
+.kv{font-size:15px;font-weight:500;line-height:1.2}
+.kv.green{color:#0f6e56}.kv.blue{color:#185fa5}.kv.red{color:#a32d2d}.kv.amber{color:#854f0b}.kv.sky{color:#0369a1}
+.ks{font-size:9px;color:var(--text-muted);margin-top:1px}
+.credito-panel{background:var(--surface-1);border-radius:10px;border:.5px solid var(--border);padding:.8rem 1rem;margin-bottom:.75rem}
+.credito-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:.65rem}
+.cc{border-radius:8px;padding:.55rem .7rem;border:.5px solid}
+.cc-eq{background:#e6f1fb;border-color:#85b7eb}
+.cc-cred{background:#e0f2fe;border-color:#7dd3fc}
+.cc-int{background:#faeeda;border-color:#fac775}
+.cc-sal{background:#eaf3de;border-color:#97c459}
+.cc-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.cc-eq .cc-label{color:#185fa5}.cc-cred .cc-label{color:#0369a1}.cc-int .cc-label{color:#633806}.cc-sal .cc-label{color:#27500a}
+.cc-val{font-size:14px;font-weight:500;color:var(--text-primary)}
+.cc-sub{font-size:9px;color:var(--text-secondary);margin-top:1px}
+.pico-banner{border-radius:9px;padding:.7rem .9rem;margin-bottom:.75rem;border:.5px solid}
+.pb-red{background:#fcebeb;border-color:#f09595}
+.pb-amber{background:#faeeda;border-color:#fac775}
+.pb-green{background:#eaf3de;border-color:#c0dd97}
+.pb-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.pb-red .pb-title{color:#a32d2d}.pb-amber .pb-title{color:#633806}.pb-green .pb-title{color:#27500a}
+.pb-body{font-size:11px;color:var(--text-secondary);line-height:1.5}
+.pb-body strong{color:var(--text-primary)}
+.alerts{margin-bottom:.75rem}
+.al{display:flex;align-items:flex-start;gap:6px;padding:6px 8px;border-radius:6px;margin-bottom:4px;font-size:11px;line-height:1.4}
+.al-red{background:#fcebeb;border:.5px solid #f09595;color:#791f1f}
+.al-amber{background:#faeeda;border:.5px solid #fac775;color:#633806}
+.al-green{background:#eaf3de;border:.5px solid #c0dd97;color:#27500a}
+.al-icon{font-weight:700;font-size:11px;margin-top:1px;flex-shrink:0}
+.tab-nav{display:flex;gap:2px;margin-bottom:.75rem;border-bottom:.5px solid var(--border);overflow-x:auto}
+.tn{padding:5px 9px;font-size:11px;font-weight:500;color:var(--text-secondary);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tn.active{color:#2a78d6;border-bottom-color:#2a78d6}
+.tn:hover{color:var(--text-primary)}
+.tc{display:none}.tc.active{display:block}
+.panel{background:var(--surface-1);border-radius:10px;border:.5px solid var(--border);padding:.8rem 1rem;margin-bottom:.75rem}
+.pt{font-size:10px;font-weight:500;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem;display:flex;align-items:center;gap:5px}
+.cw{position:relative;width:100%;height:200px}
+.cw-xl{position:relative;width:100%;height:255px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem}
+.legend{display:flex;gap:10px;font-size:10px;color:var(--text-secondary);margin-bottom:.5rem;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:4px}
+.ld{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.phase-indicator{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:.65rem}
+.ph{border-radius:7px;padding:.45rem .6rem;border:.5px solid var(--border);text-align:center;background:var(--surface-0)}
+.ph-num{font-size:12px;font-weight:500;margin-bottom:1px;color:var(--text-primary)}
+.ph-label{font-size:9px;color:var(--text-muted);line-height:1.3}
+.wf-step{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px}
+.wf-lbl{width:145px;color:var(--text-secondary);text-align:right;flex-shrink:0}
+.wf-track{flex:1;background:var(--surface-0);border-radius:3px;height:17px}
+.wf-fill{height:100%;border-radius:3px;display:flex;align-items:center;padding:0 5px;font-size:10px;font-weight:500;color:#fff;transition:width .3s}
+.wf-val{width:80px;text-align:right;font-weight:500;font-size:10px}
+.scen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.sc{border-radius:9px;padding:.65rem .8rem;border:.5px solid}
+.sc-p{background:#fcebeb;border-color:#f09595}.sc-b{background:#e6f1fb;border-color:#85b7eb}.sc-o{background:#eaf3de;border-color:#97c459}
+.sc-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.sc-p .sc-title{color:#a32d2d}.sc-b .sc-title{color:#185fa5}.sc-o .sc-title{color:#27500a}
+.sc-row{font-size:10px;color:var(--text-secondary);margin-bottom:2px;display:flex;justify-content:space-between}
+.sc-row strong{color:var(--text-primary)}
+.badge{font-size:10px;font-weight:600;padding:2px 6px;border-radius:20px;display:inline-block;margin-top:3px}
+.bv{background:#eaf3de;color:#27500a}.bm{background:#faeeda;color:#633806}.bn{background:#fcebeb;color:#a32d2d}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);padding:4px 6px;text-align:right;border-bottom:.5px solid var(--border)}
+th:first-child{text-align:left}
+td{padding:3px 6px;text-align:right;border-bottom:.5px solid var(--border);color:var(--text-secondary);white-space:nowrap}
+td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
+.sg2{background:#eaf3de;color:#27500a}.sm2{background:#faeeda;color:#633806}.sb2{background:#fcebeb;color:#791f1f}
+.sc-cell{padding:2px 4px;border-radius:3px;font-size:10px;text-align:center;font-weight:500;display:inline-block}
+.cb-btns{display:flex;gap:3px;margin-bottom:.5rem}
+.cb{flex:1;padding:3px 0;font-size:10px;font-weight:500;text-align:center;border:.5px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text-secondary);background:transparent}
+.cb.active{background:var(--bg-accent);color:var(--text-accent);border-color:var(--border-accent)}
+.cb:hover{background:var(--surface-0)}
+.sal-display{font-size:10px;color:var(--text-muted);margin-bottom:.4rem;padding:4px 6px;background:var(--surface-0);border-radius:4px}
+@media(max-width:960px){
+  .app{grid-template-columns:1fr}
+  .sb{border-right:none;border-bottom:.5px solid var(--border)}
+  .kpi-row{grid-template-columns:repeat(3,1fr)}
+  .credito-grid{grid-template-columns:repeat(2,1fr)}
+  .phase-indicator{grid-template-columns:repeat(2,1fr)}
+  .scen-grid{grid-template-columns:1fr}
+  .grid2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<div class="sb">
+  <div class="sbh">
+    <div class="sbh-top">
+      <div class="sbh-t">Modelo Financiero Inmobiliario · Colombia</div>
+      <div class="cur-toggle">
+        <button class="cur-btn active" id="btn-cop" onclick="setCur('COP')">COP</button>
+        <button class="cur-btn" id="btn-usd" onclick="setCur('USD')">USD</button>
+      </div>
+    </div>
+    <div class="trm-row" id="trm-row">
+      <span>TRM:</span>
+      <input type="number" id="trm" value="4200" min="1000" max="10000" step="50" oninput="update()">
+      <span>COP/USD</span>
+    </div>
+  </div>
+
+  <div class="sg">
+    <div class="sl"><span class="dot db"></span>Terreno y programa físico</div>
+    <div class="f"><label>Área del terreno (m²) <span class="val" id="v-terreno">1.000</span></label><input type="range" id="terreno" min="200" max="5000" step="50" value="1000"></div>
+    <div class="f"><label>Precio terreno (COP/m²) <span class="val" id="v-pterre">7.560.000</span></label><input type="range" id="pterre" min="500000" max="30000000" step="100000" value="7560000"></div>
+    <div class="f"><label>Área libre no construible (%) <span class="val" id="v-alib">30</span>%</label><input type="range" id="alib" min="10" max="55" step="1" value="30"></div>
+    <div class="f"><label>Pisos sobre rasante <span class="val" id="v-pisos">8</span></label><input type="range" id="pisos" min="2" max="25" step="1" value="8"></div>
+    <div class="f"><label>Sótanos <span class="val" id="v-sotan">3</span></label><input type="range" id="sotan" min="0" max="6" step="1" value="3"></div>
+    <div class="f"><label>Cobertura sótano (%) <span class="val" id="v-cobsot">100</span>%</label><input type="range" id="cobsot" min="50" max="100" step="5" value="100"></div>
+    <div class="f"><label>Área común / tránsito (%) <span class="val" id="v-acomun">12</span>%</label><input type="range" id="acomun" min="5" max="25" step="1" value="12"></div>
+    <div class="f"><label>Área por estacionamiento (m²) <span class="val" id="v-aestac">28</span></label><input type="range" id="aestac" min="20" max="40" step="1" value="28"></div>
+  </div>
+
+  <div class="sg">
+    <div class="sl"><span class="dot dp"></span>Preventa — Colombia</div>
+    <div class="f"><label>Precio vendible (COP/m²) <span class="val" id="v-pv">10.080.000</span></label><input type="range" id="pv" min="2000000" max="40000000" step="100000" value="10080000"></div>
+    <div class="f"><label>Precio estacionamiento (COP) <span class="val" id="v-pe">50.400.000</span></label><input type="range" id="pe" min="10000000" max="250000000" step="1000000" value="50400000"></div>
+    <div class="f"><label>Separación (% del precio) <span class="val" id="v-sep">2</span>%</label><input type="range" id="sep" min="0" max="5" step="0.5" value="2"></div>
+    <div class="f"><label>Cuota inicial total (% del precio) <span class="val" id="v-cipct">28</span>%</label><input type="range" id="cipct" min="0" max="40" step="1" value="28"></div>
+    <div id="sal-display" class="sal-display"></div>
+    <div class="f"><label>Inicio cuotas CI desde firma (mes) <span class="val" id="v-mesci">1</span></label><input type="range" id="mesci" min="1" max="6" step="1" value="1"></div>
+  </div>
+
+  <div class="sg">
+    <div class="sl"><span class="dot dc"></span>Crédito constructor</div>
+    <div class="f"><label>Punto equilibrio ventas p/ apertura (%) <span class="val" id="v-peq">65</span>%</label><input type="range" id="peq" min="40" max="90" step="5" value="65"></div>
+    <div class="f"><label>% costo directo financiado por banco <span class="val" id="v-pfinc">70</span>%</label><input type="range" id="pfinc" min="40" max="90" step="5" value="70"></div>
+    <div class="f"><label>Tasa crédito constructor (% anual) <span class="val" id="v-tcred">14</span>%</label><input type="range" id="tcred" min="8" max="25" step="0.5" value="14"></div>
+    <div class="f"><label>Tramos de desembolso <span class="val" id="v-tramos">10</span></label><input type="range" id="tramos" min="3" max="20" step="1" value="10"></div>
+  </div>
+
+  <div class="sg">
+    <div class="sl"><span class="dot dg"></span>Curva de absorción</div>
+    <div class="cb-btns">
+      <button class="cb" onclick="setCurva('s',this)">Curva S</button>
+      <button class="cb active" onclick="setCurva('rapida',this)">Lanzamiento</button>
+      <button class="cb" onclick="setCurva('lenta',this)">Lento</button>
+      <button class="cb" onclick="setCurva('lineal',this)">Lineal</button>
+    </div>
+    <div class="f"><label>Ritmo pico (% unidades/mes) <span class="val" id="v-rpico">8</span>%</label><input type="range" id="rpico" min="1" max="20" step="0.5" value="8"></div>
+    <div class="f"><label>Mes del pico de ventas <span class="val" id="v-mpico">4</span></label><input type="range" id="mpico" min="1" max="18" step="1" value="4"></div>
+    <div class="f"><label>Retraso inicio ventas (meses) <span class="val" id="v-retraso">0</span></label><input type="range" id="retraso" min="0" max="12" step="1" value="0"></div>
+  </div>
+
+  <div class="sg">
+    <div class="sl"><span class="dot da"></span>Costos de construcción</div>
+    <div class="f"><label>Costo sobre rasante (COP/m²) <span class="val" id="v-csr">2.730.000</span></label><input type="range" id="csr" min="500000" max="12000000" step="100000" value="2730000"></div>
+    <div class="f"><label>Costo sótanos (COP/m²) <span class="val" id="v-csot">3.150.000</span></label><input type="range" id="csot" min="800000" max="14000000" step="100000" value="3150000"></div>
+    <div class="f"><label>Costos indirectos (% s/ directos) <span class="val" id="v-ciind">15.5</span>%</label><input type="range" id="ciind" min="5" max="30" step="0.5" value="15.5"></div>
+  </div>
+
+  <div class="sg">
+    <div class="sl"><span class="dot dr"></span>Comercial y financiero</div>
+    <div class="f"><label>Gastos comerciales (% ventas) <span class="val" id="v-gc">5.5</span>%</label><input type="range" id="gc" min="1" max="12" step="0.5" value="5.5"></div>
+    <div class="f"><label>Gastos administrativos (% ventas) <span class="val" id="v-ga">2</span>%</label><input type="range" id="ga" min="0.5" max="6" step="0.5" value="2"></div>
+    <div class="f"><label>Equity GP+LP (% costo total) <span class="val" id="v-equity">40</span>%</label><input type="range" id="equity" min="20" max="100" step="5" value="40"></div>
+    <div class="f"><label>Impuesto a la renta (%) <span class="val" id="v-imp">33</span>%</label><input type="range" id="imp" min="10" max="40" step="0.5" value="33"></div>
+    <div class="f"><label>Tasa descuento VPN (% anual) <span class="val" id="v-tvpn">12</span>%</label><input type="range" id="tvpn" min="5" max="25" step="0.5" value="12"></div>
+  </div>
+
+  <div class="sg">
+    <div class="sl"><span class="dot db"></span>Cronograma</div>
+    <div class="f"><label>Duración total proyecto (meses) <span class="val" id="v-dtotal">30</span></label><input type="range" id="dtotal" min="12" max="60" step="1" value="30"></div>
+    <div class="f"><label>Preventa antes de inicio obra (meses) <span class="val" id="v-dprev">4</span></label><input type="range" id="dprev" min="0" max="12" step="1" value="4"></div>
+    <div class="f"><label>Duración de obra (meses) <span class="val" id="v-dobra">18</span></label><input type="range" id="dobra" min="6" max="48" step="1" value="18"></div>
+  </div>
+
+  <div class="sg">
+    <div class="sl"><span class="dot dv"></span>Estructura LP / GP</div>
+    <div class="f"><label>Capital GP (% del equity) <span class="val" id="v-gppct">20</span>%</label><input type="range" id="gppct" min="5" max="50" step="5" value="20"></div>
+    <div class="f"><label>Hurdle rate LP (% anual) <span class="val" id="v-hurdle">15</span>%</label><input type="range" id="hurdle" min="8" max="30" step="1" value="15"></div>
+    <div class="f"><label>Split upside — GP recibe (%) <span class="val" id="v-gpsplit">30</span>%</label><input type="range" id="gpsplit" min="10" max="50" step="5" value="30"></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:.75rem;flex-wrap:wrap">
+    <div style="font-size:16px;font-weight:600;color:var(--text-primary)">Modelo Financiero Inmobiliario</div>
+    <div style="font-size:11px;color:var(--text-muted)" id="main-sub">Colombia · COP · Preventa escalonada · Crédito constructor · Curva S · Waterfall LP/GP</div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="kl">Utilidad neta</div><div class="kv green" id="k-util">—</div><div class="ks" id="k-marg">—</div></div>
+    <div class="kpi"><div class="kl">TIR inversionista</div><div class="kv blue" id="k-tir">—</div><div class="ks">sobre equity · anual</div></div>
+    <div class="kpi"><div class="kl">VPN</div><div class="kv blue" id="k-vpn">—</div><div class="ks" id="k-vpns">—</div></div>
+    <div class="kpi" style="border-color:#0284c7"><div class="kl" style="color:#0369a1">Crédito constructor</div><div class="kv sky" id="k-cred">—</div><div class="ks" id="k-cred-sub">—</div></div>
+    <div class="kpi" style="border-color:#e34948"><div class="kl" style="color:#a32d2d">Pico equity requerido</div><div class="kv red" id="k-pico">—</div><div class="ks" id="k-pico-mes">—</div></div>
+    <div class="kpi"><div class="kl">Payback</div><div class="kv amber" id="k-pb">—</div><div class="ks">flujo acum. positivo</div></div>
+  </div>
+
+  <div class="credito-panel">
+    <div class="pt"><span class="dot dc"></span>Estructura de financiamiento del proyecto</div>
+    <div class="credito-grid" id="cred-grid"></div>
+    <div class="phase-indicator" id="phase-ind"></div>
+    <div style="font-size:10px;color:var(--text-muted);border-top:.5px solid var(--border);padding-top:.5rem" id="cred-nota"></div>
+  </div>
+
+  <div id="pico-banner"></div>
+  <div id="alerts-area" class="alerts"></div>
+
+  <div class="tab-nav">
+    <button class="tn active" onclick="showTab('financiamiento',this)">Financiamiento</button>
+    <button class="tn" onclick="showTab('ingresos',this)">Ingresos preventa</button>
+    <button class="tn" onclick="showTab('flujos',this)">Flujo de caja</button>
+    <button class="tn" onclick="showTab('resultados',this)">Resultados</button>
+    <button class="tn" onclick="showTab('waterfall',this)">Waterfall LP/GP</button>
+    <button class="tn" onclick="showTab('sensibilidad',this)">Sensibilidad</button>
+    <button class="tn" onclick="showTab('escenarios',this)">Escenarios</button>
+  </div>
+
+  <div class="tc active" id="tab-financiamiento">
+    <div class="panel">
+      <div class="pt"><span class="dot dc"></span>Fuentes de caja mes a mes — equity · crédito constructor · preventa</div>
+      <div class="legend">
+        <span class="li"><span class="ld" style="background:#2a78d6"></span>Equity acumulado</span>
+        <span class="li"><span class="ld" style="background:#0ea5e9"></span>Crédito constructor acumulado</span>
+        <span class="li"><span class="ld" style="background:#1baf7a"></span>Preventa acumulada (sep + CI)</span>
+        <span class="li"><span class="ld" style="background:#e34948;opacity:.7"></span>Pico equity (mes crítico)</span>
+      </div>
+      <div class="cw-xl"><canvas id="chartFin" role="img" aria-label="Fuentes de financiamiento mes a mes"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="pt"><span class="dot dr"></span>Saldo crédito constructor e intereses acumulados</div>
+      <div class="legend">
+        <span class="li"><span class="ld" style="background:#0ea5e9"></span>Saldo crédito vigente</span>
+        <span class="li"><span class="ld" style="background:#eda100"></span>Intereses acumulados</span>
+      </div>
+      <div class="cw"><canvas id="chartCred" role="img" aria-label="Evolución saldo crédito constructor"></canvas></div>
+    </div>
+  </div>
+
+  <div class="tc" id="tab-ingresos">
+    <div class="panel">
+      <div class="pt"><span class="dot dp"></span>Ingresos por componente — separación · cuotas CI · saldo a la entrega</div>
+      <div class="legend">
+        <span class="li"><span class="ld" style="background:#2a78d6"></span>Separación</span>
+        <span class="li"><span class="ld" style="background:#1baf7a"></span>Cuotas CI mensuales</span>
+        <span class="li"><span class="ld" style="background:#eda100"></span>Saldo entrega</span>
+        <span class="li"><span class="ld" style="background:#e34948"></span>Flujo acumulado</span>
+      </div>
+      <div class="cw-xl"><canvas id="chartIng" role="img" aria-label="Ingresos por componente de preventa"></canvas></div>
+    </div>
+  </div>
+
+  <div class="tc" id="tab-flujos">
+    <div class="panel">
+      <div class="pt"><span class="dot db"></span>Flujo de caja neto mensual</div>
+      <div class="legend">
+        <span class="li"><span class="ld" style="background:#1baf7a"></span>Ingresos mes</span>
+        <span class="li"><span class="ld" style="background:#e34948"></span>Egresos mes (construcción + intereses)</span>
+        <span class="li"><span class="ld" style="background:#2a78d6"></span>Flujo acumulado</span>
+      </div>
+      <div class="cw-xl"><canvas id="chartFlujos" role="img" aria-label="Flujo de caja neto mensual"></canvas></div>
+    </div>
+  </div>
+
+  <div class="tc" id="tab-resultados">
+    <div class="grid2">
+      <div class="panel"><div class="pt"><span class="dot db"></span>Estado de resultados</div><div id="er-content"></div></div>
+      <div class="panel"><div class="pt"><span class="dot dg"></span>Inversión y retorno</div><div id="ir-content"></div></div>
+    </div>
+  </div>
+
+  <div class="tc" id="tab-waterfall">
+    <div class="panel"><div class="pt"><span class="dot dv"></span>Distribución LP / GP — Waterfall</div><div id="wf-content"></div></div>
+  </div>
+
+  <div class="tc" id="tab-sensibilidad">
+    <div class="panel">
+      <div class="pt"><span class="dot da"></span>Sensibilidad — TIR vs. precio × ritmo de absorción</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:.4rem">Verde = TIR &gt; hurdle · Amarillo = positiva bajo hurdle · Rojo = TIR negativa</div>
+      <div style="overflow-x:auto" id="sens-content"></div>
+    </div>
+  </div>
+
+  <div class="tc" id="tab-escenarios">
+    <div class="panel"><div class="pt"><span class="dot da"></span>Comparador de escenarios — pesimista · base · optimista</div><div id="scen-content"></div></div>
+  </div>
+</div>
+</div>
+
+<script>
+// ── Moneda ────────────────────────────────────────────────────────
+// Todos los cálculos internos en COP. Si el usuario activa USD,
+// los valores se dividen por la TRM solo al momento de mostrar.
+let activeCur = 'COP';
+
+function getTRM(){ return parseFloat(document.getElementById('trm').value) || 4200; }
+
+function setCur(cur) {
+  activeCur = cur;
+  document.getElementById('btn-cop').classList.toggle('active', cur === 'COP');
+  document.getElementById('btn-usd').classList.toggle('active', cur === 'USD');
+  document.getElementById('trm-row').style.display = cur === 'USD' ? 'flex' : 'none';
+  document.getElementById('main-sub').textContent =
+    cur === 'COP'
+      ? 'Colombia · COP · Preventa escalonada · Crédito constructor · Curva S · Waterfall LP/GP'
+      : 'Colombia · USD (÷ TRM ' + getTRM().toLocaleString('es-CO') + ') · Preventa escalonada · Crédito constructor';
+  update();
+}
+
+// Convierte COP a la moneda activa para mostrar
+function toDisp(cop) { return activeCur === 'USD' ? cop / getTRM() : cop; }
+
+// Formatea un valor COP en la moneda activa
+function fM(cop) {
+  if (cop === null || cop === undefined) return '—';
+  const v = toDisp(cop);
+  const a = Math.abs(v);
+  const neg = v < 0;
+  if (activeCur === 'COP') {
+    let s;
+    if (a >= 1e12)      s = (a / 1e12).toFixed(2) + ' B';
+    else if (a >= 1e9)  s = (a / 1e9).toFixed(2) + ' MM';
+    else if (a >= 1e6)  s = (a / 1e6).toFixed(1) + ' M';
+    else if (a >= 1e3)  s = (a / 1e3).toFixed(0) + ' K';
+    else                s = Math.round(a).toLocaleString('es-CO');
+    return (neg ? '-' : '') + '$ ' + s;
+  } else {
+    let s;
+    if (a >= 1e6)      s = (a / 1e6).toFixed(2) + ' M';
+    else if (a >= 1e3) s = (a / 1e3).toFixed(1) + ' K';
+    else               s = Math.round(a).toLocaleString();
+    return (neg ? '-' : '') + 'USD ' + s;
+  }
+}
+
+function fP(v, d = 1) { return v === null ? '—' : v.toFixed(d) + '%'; }
+
+// Escala array COP a unidades de display para Chart.js (en millones COP o miles USD)
+function scaleArr(arr) {
+  if (activeCur === 'COP') return arr.map(v => Math.round(v / 1e6));      // millones COP
+  else                     return arr.map(v => Math.round(v / getTRM() / 1e3)); // miles USD
+}
+
+function chartLabel(v) {
+  // v viene en las unidades de scaleArr
+  if (activeCur === 'COP') return (v < 0 ? '-' : '') + '$ ' + Math.abs(v) + ' M';
+  else                     return (v < 0 ? '-' : '') + 'USD ' + Math.abs(v) + ' K';
+}
+
+// ── Curvas de absorción ───────────────────────────────────────────
+let curvaActiva = 'rapida';
+const curvas = {
+  s:      (N, pico, mp) => { const a = []; for (let i = 0; i < N; i++) { const x = (i - mp) / (Math.max(N,1)/4); a.push(1/(1+Math.exp(-x))); } const mx = Math.max(...a)||1; return a.map(v => v/mx*pico); },
+  rapida: (N, pico, mp) => { const a = []; for (let i = 0; i < N; i++) { a.push(i < mp ? pico*(i+1)/mp : pico*Math.pow(0.82, i-mp)); } return a; },
+  lenta:  (N, pico)     => Array.from({length:N}, (_,i) => pico * Math.pow((i+1)/N, 1.6)),
+  lineal: (N, pico)     => Array(N).fill(pico * 0.65)
+};
+
+function setCurva(c, btn) { curvaActiva = c; document.querySelectorAll('.cb').forEach(b => b.classList.remove('active')); btn.classList.add('active'); update(); }
+function showTab(id, btn) { document.querySelectorAll('.tc').forEach(t => t.classList.remove('active')); document.querySelectorAll('.tn').forEach(t => t.classList.remove('active')); document.getElementById('tab-'+id).classList.add('active'); btn.classList.add('active'); setTimeout(() => update(), 30); }
+
+// ── Lectura de inputs ─────────────────────────────────────────────
+function getInp() {
+  const g  = id => parseFloat(document.getElementById(id).value);
+  const sp = g('sep') / 100;
+  const ci = g('cipct') / 100;
+  const sl = Math.max(0, 1 - sp - ci);
+  document.getElementById('sal-display').textContent =
+    `Separación ${Math.round(sp*100)}% + CI ${Math.round(ci*100)}% + Saldo ${Math.round(sl*100)}% = 100%`;
+  return {
+    terreno: g('terreno'), pterre: g('pterre'), alib: g('alib')/100,
+    pisos: g('pisos'), sotan: g('sotan'), cobsot: g('cobsot')/100,
+    acomun: g('acomun')/100, aestac: g('aestac'),
+    pv: g('pv'), pe: g('pe'),
+    sepPct: sp, ciPct: ci, salPct: sl, mesci: Math.round(g('mesci')),
+    peq: g('peq')/100, pfinc: g('pfinc')/100, tcred: g('tcred')/100, tramos: Math.round(g('tramos')),
+    csr: g('csr'), csot: g('csot'), ciind: g('ciind')/100,
+    gc: g('gc')/100, ga: g('ga')/100,
+    equity: g('equity')/100, imp: g('imp')/100, tvpn: g('tvpn')/100,
+    dtotal: Math.round(g('dtotal')), dprev: Math.round(g('dprev')), dobra: Math.round(g('dobra')),
+    rpico: g('rpico')/100, mpico: Math.round(g('mpico')), retraso: Math.round(g('retraso')),
+    gppct: g('gppct')/100, hurdle: g('hurdle')/100, gpsplit: g('gpsplit')/100
+  };
+}
+
+// ── Cálculo del programa físico (en COP) ─────────────────────────
+function calcProg(inp) {
+  const hc  = inp.terreno * (1 - inp.alib);
+  const aSR = hc * inp.pisos;
+  const aSot = inp.terreno * inp.cobsot * inp.sotan;
+  const aV  = aSR * (1 - inp.acomun);
+  const nE  = Math.floor(aSot / inp.aestac);
+  const cT  = inp.terreno * inp.pterre;          // COP
+  return { hc, aSR, aSot, aV, nE, cT };
+}
+
+// ── Cálculo financiero base (en COP) ─────────────────────────────
+function calcFin(inp, prog, pvMult = 1) {
+  const pv  = inp.pv * pvMult;
+  const ingT = prog.aV * pv + prog.nE * inp.pe;  // COP
+  const cC  = prog.aSR * inp.csr + prog.aSot * inp.csot;
+  const cI  = cC * inp.ciind;
+  const gC  = ingT * inp.gc;
+  const gA  = ingT * inp.ga;
+  const cTP = prog.cT + cC + cI;
+  return { ingT, cC, cI, gC, gA, cTP, pv };
+}
+
+// ── Modelo completo mes a mes (en COP) ───────────────────────────
+function calcModel(inp, prog, fin) {
+  const N      = inp.dtotal;
+  const inicioV = inp.dprev + inp.retraso;
+  const finObra = inp.dprev + inp.dobra;
+  const mVenta  = Math.max(1, N - inicioV);
+
+  // Absorción
+  const rawC  = curvas[curvaActiva](mVenta, inp.rpico, inp.mpico);
+  const totR  = rawC.reduce((a,b) => a+b, 0) || 1;
+  const pctMes = rawC.map(v => Math.min(v/totR, 0.5));
+  const unidMes = []; let vAcum = 0;
+  for (let i = 0; i < N; i++) {
+    if (i >= inicioV) { const idx = i - inicioV; const pct = idx < pctMes.length ? pctMes[idx] : 0; const u = Math.max(0, Math.min(pct, 1-vAcum)); unidMes.push(u); vAcum += u; }
+    else unidMes.push(0);
+  }
+
+  // Ingresos preventa escalonados
+  const ingSep = Array(N).fill(0), ingCI = Array(N).fill(0), ingSal = Array(N).fill(0);
+  for (let i = 0; i < N; i++) {
+    const u = unidMes[i]; if (u <= 0) continue;
+    const ingU = fin.ingT * u;
+    ingSep[i] += ingU * inp.sepPct;
+    const iniCI = i + inp.mesci;
+    const mCI   = Math.max(1, finObra - iniCI);
+    const cuota = (ingU * inp.ciPct) / mCI;
+    for (let j = iniCI; j < finObra && j < N; j++) ingCI[j] += cuota;
+    if (finObra < N) ingSal[finObra] += ingU * inp.salPct;
+  }
+  const ingPreventaMes = ingSep.map((s,i) => s + ingCI[i]);
+  const ingTotalMes    = ingPreventaMes.map((v,i) => v + ingSal[i]);
+
+  // Costos construcción lineales
+  const costConst = Array(N).fill(0), costIndir = Array(N).fill(0);
+  for (let i = inp.dprev; i < finObra; i++) { costConst[i] = fin.cC/inp.dobra; costIndir[i] = fin.cI/inp.dobra; }
+
+  // Crédito constructor
+  let mesAp = -1; let vAc2 = 0;
+  for (let i = 0; i < N; i++) { vAc2 += unidMes[i]; if (vAc2 >= inp.peq && mesAp < 0) mesAp = i; }
+  if (mesAp < 0) mesAp = finObra;
+  const montoCred = fin.cC * inp.pfinc;
+  const desemb    = Array(N).fill(0);
+  const mesD = Math.min(Math.max(mesAp, inp.dprev), finObra - 1);
+  const mDisp = Math.max(1, finObra - mesD);
+  const mPT   = montoCred / inp.tramos;
+  const inter = Math.max(1, Math.floor(mDisp / inp.tramos));
+  let tEmit = 0;
+  for (let i = mesD; i < finObra && tEmit < inp.tramos; i += inter) { desemb[i] += mPT; tEmit++; }
+  const totDes = desemb.reduce((a,b)=>a+b,0);
+  if (Math.abs(totDes - montoCred) > 1 && finObra-1 < N) desemb[finObra-1] += (montoCred - totDes);
+
+  // Intereses sobre saldo vigente
+  const tMens = inp.tcred / 12;
+  const saldoCred = Array(N).fill(0), intMes = Array(N).fill(0);
+  let saldo = 0;
+  for (let i = 0; i < N; i++) {
+    saldo += desemb[i]; intMes[i] = saldo * tMens; saldo += intMes[i];
+    if (i === finObra && saldo > 0) saldo = 0;
+    saldoCred[i] = saldo;
+  }
+  const totalInt   = intMes.reduce((a,b)=>a+b,0);
+  const saldoFinal = finObra > 0 && finObra <= N ? saldoCred[finObra-1] : 0;
+
+  // Egresos totales
+  const egMes = Array(N).fill(0);
+  egMes[0] += prog.cT;
+  for (let i = 0; i < N; i++) egMes[i] += costConst[i] + costIndir[i] + intMes[i];
+  if (finObra < N) egMes[finObra] += saldoFinal;
+  for (let i = inicioV; i < N; i++) { const u = unidMes[i]; if (u > 0) egMes[i] += (fin.gC + fin.gA) * u; }
+
+  // Flujos
+  const flujoNeto = ingTotalMes.map((v,i) => v - egMes[i]);
+  let acF = 0; const flujoAcum = flujoNeto.map(f => { acF += f; return acF; });
+  let acE = 0; const egAcum    = egMes.map(e => { acE += e; return acE; });
+  let acI = 0; const ingAcum   = ingTotalMes.map(v => { acI += v; return acI; });
+  let acD = 0; const desAcum   = desemb.map(d => { acD += d; return acD; });
+  let acP = 0; const prevAcum  = ingPreventaMes.map(v => { acP += v; return acP; });
+
+  // Equity requerido = brecha real
+  const equityReq = egAcum.map((e,i) => Math.max(0, e - desAcum[i] - prevAcum[i]));
+  const picoEq    = Math.max(...equityReq, 0);
+  const mesPico   = equityReq.indexOf(picoEq) + 1;
+
+  let payback = null;
+  for (let i = 0; i < flujoAcum.length; i++) { if (flujoAcum[i] >= 0 && !payback) payback = i + 1; }
+
+  // Estado de resultados
+  const ingTot  = ingTotalMes.reduce((a,b)=>a+b,0);
+  const uBruta  = ingTot - prog.cT - fin.cC - fin.cI;
+  const uAI     = uBruta - fin.gC - fin.gA - totalInt;
+  const impM    = Math.max(0, uAI * inp.imp);
+  const uN      = uAI - impM;
+  const mN      = ingTot > 0 ? uN / ingTot : 0;
+  const mB      = ingTot > 0 ? uBruta / ingTot : 0;
+  const MOIC    = picoEq > 0 ? (picoEq + uN) / picoEq : 1;
+
+  return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, ingTotalMes, egMes, flujoNeto,
+    flujoAcum, egAcum, ingAcum, desemb, desAcum, saldoCred, intMes, equityReq,
+    picoEq, mesPico, montoCred, mesAp, totalInt, saldoFinal, payback, vAcum,
+    N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC };
+}
+
+function calcVPN(cf, r) { return cf.reduce((a,v,t) => a + v / Math.pow(1 + r/12, t), 0); }
+
+function calcWF(inp, m) {
+  const lp = 1 - inp.gppct; const lpC = m.eqInv * lp; const gpC = m.eqInv * inp.gppct;
+  const yrs = inp.dtotal / 12; const hAmt = lpC * (Math.pow(1+inp.hurdle, yrs) - 1);
+  const disp = Math.max(0, m.uN); let r = disp;
+  const dLP = Math.min(r, lpC); r -= dLP;
+  const dGP = Math.min(r, gpC); r -= dGP;
+  const pLP = Math.min(r, hAmt); r -= pLP;
+  const uLP = r * (1 - inp.gpsplit); const uGP = r * inp.gpsplit;
+  const tLP = dLP + pLP + uLP; const tGP = dGP + uGP;
+  const tirLP = lpC > 0 ? Math.pow(tLP/lpC, 1/yrs) - 1 : 0;
+  const tirGP = gpC > 0 ? Math.pow(tGP/gpC, 1/yrs) - 1 : 0;
+  return { lpC, gpC, hAmt, dLP, dGP, pLP, uLP, uGP, tLP, tGP, tirLP, tirGP, disp };
+}
+
+// ── Charts ────────────────────────────────────────────────────────
+let charts = {};
+function dc(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function renderChartFin(m) {
+  dc('fin');
+  const ctx = document.getElementById('chartFin').getContext('2d');
+  const labs = Array.from({length:m.N}, (_,i) => 'M'+(i+1));
+  const picoIdx = m.equityReq.indexOf(m.picoEq);
+  charts['fin'] = new Chart(ctx, { type:'bar', data:{ labels:labs, datasets:[
+    { label:'Equity', data:scaleArr(m.equityReq), backgroundColor:m.equityReq.map((_,i)=>i===picoIdx?'rgba(227,73,72,0.85)':'rgba(42,120,214,0.55)'), order:3, yAxisID:'y' },
+    { label:'Crédito', data:scaleArr(m.desAcum), type:'line', borderColor:'#0ea5e9', borderWidth:2, pointRadius:0, fill:false, order:2, yAxisID:'y' },
+    { label:'Preventa', data:scaleArr(m.ingAcum), type:'line', borderColor:'#1baf7a', borderWidth:2, pointRadius:0, borderDash:[4,3], fill:false, order:1, yAxisID:'y' }
+  ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{x:{ticks:{font:{size:9},autoSkip:true,maxTicksLimit:15}}, y:{ticks:{font:{size:9},callback:v=>chartLabel(v)}}}}});
+}
+
+function renderChartCred(m) {
+  dc('cred');
+  const ctx = document.getElementById('chartCred').getContext('2d');
+  const labs = Array.from({length:m.N}, (_,i) => 'M'+(i+1));
+  let ac = 0; const intAc = m.intMes.map(v=>{ac+=v;return ac;});
+  charts['cred'] = new Chart(ctx, { type:'bar', data:{ labels:labs, datasets:[
+    { label:'Saldo crédito', data:scaleArr(m.saldoCred), backgroundColor:'rgba(14,165,233,0.6)', order:2 },
+    { label:'Intereses acum.', data:scaleArr(intAc), type:'line', borderColor:'#eda100', borderWidth:2, pointRadius:0, fill:false, order:1 }
+  ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{x:{ticks:{font:{size:9},autoSkip:true,maxTicksLimit:15}}, y:{ticks:{font:{size:9},callback:v=>chartLabel(v)}}}}});
+}
+
+function renderChartIng(m) {
+  dc('ing');
+  const ctx = document.getElementById('chartIng').getContext('2d');
+  const labs = Array.from({length:m.N}, (_,i) => 'M'+(i+1));
+  charts['ing'] = new Chart(ctx, { type:'bar', data:{ labels:labs, datasets:[
+    { label:'Separación', data:scaleArr(m.ingSep), backgroundColor:'rgba(42,120,214,0.75)', stack:'s', order:2 },
+    { label:'Cuotas CI',  data:scaleArr(m.ingCI),  backgroundColor:'rgba(27,175,122,0.75)', stack:'s', order:2 },
+    { label:'Saldo',      data:scaleArr(m.ingSal), backgroundColor:'rgba(237,161,0,0.85)',  stack:'s', order:2 },
+    { label:'Acumulado',  data:scaleArr(m.flujoAcum), type:'line', borderColor:'#e34948', borderWidth:2, pointRadius:0, fill:false, order:1, yAxisID:'y' }
+  ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{x:{ticks:{font:{size:9},autoSkip:true,maxTicksLimit:15},stacked:true}, y:{ticks:{font:{size:9},callback:v=>chartLabel(v)},stacked:true}}}});
+}
+
+function renderChartFlujos(m) {
+  dc('fl');
+  const ctx = document.getElementById('chartFlujos').getContext('2d');
+  const labs = Array.from({length:m.N}, (_,i) => 'M'+(i+1));
+  charts['fl'] = new Chart(ctx, { type:'bar', data:{ labels:labs, datasets:[
+    { label:'Ingresos', data:scaleArr(m.ingTotalMes), backgroundColor:'rgba(27,175,122,0.65)', order:2 },
+    { label:'Egresos',  data:m.egMes.map(v=>Math.round(toDisp(-v)/( activeCur==='COP'?1e6:1e3/getTRM()))), backgroundColor:'rgba(227,73,72,0.55)', order:2 },
+    { label:'Acumulado',data:scaleArr(m.flujoAcum), type:'line', borderColor:'#2a78d6', borderWidth:2, pointRadius:0, fill:false, order:1 }
+  ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{x:{ticks:{font:{size:9},autoSkip:true,maxTicksLimit:15}}, y:{ticks:{font:{size:9},callback:v=>chartLabel(v)}}}}});
+}
+
+// ── Renders de paneles ────────────────────────────────────────────
+function renderCredPanel(inp, prog, fin, m) {
+  const pctCosto = fin.cTP > 0 ? m.picoEq / fin.cTP * 100 : 0;
+  document.getElementById('cred-grid').innerHTML = [
+    {cls:'cc-eq',  lbl:'Equity pico requerido',     val:fM(m.picoEq),    sub:'Mes '+m.mesPico+' · '+fP(pctCosto)+' del costo total'},
+    {cls:'cc-cred',lbl:'Crédito constructor',        val:fM(m.montoCred), sub:fP(inp.pfinc*100)+' del costo directo de construcción'},
+    {cls:'cc-int', lbl:'Intereses totales',           val:fM(m.totalInt),  sub:'Tasa '+fP(inp.tcred*100)+' anual sobre saldo vigente'},
+    {cls:'cc-sal', lbl:'Saldo al cancelar crédito',  val:fM(m.saldoFinal),sub:'Pagado con saldo compradores en mes '+m.finObra}
+  ].map(c=>`<div class="cc ${c.cls}"><div class="cc-label">${c.lbl}</div><div class="cc-val">${c.val}</div><div class="cc-sub">${c.sub}</div></div>`).join('');
+
+  const abre = m.mesAp >= 0 && m.mesAp < m.N ? 'Mes '+(m.mesAp+1) : 'No abre';
+  document.getElementById('phase-ind').innerHTML = [
+    {n:'Mes 1',             l:'Compra terreno + inicio preventa'},
+    {n:abre,                l:'Apertura crédito constructor (PEQ)'},
+    {n:'Mes '+m.finObra,    l:'Entrega · saldo compradores · cancela crédito'},
+    {n:m.payback?'Mes '+m.payback:'—', l:'Payback equity inversionistas'}
+  ].map(p=>`<div class="ph"><div class="ph-num">${p.n}</div><div class="ph-label">${p.l}</div></div>`).join('');
+
+  const ok = m.vAcum >= inp.peq;
+  document.getElementById('cred-nota').textContent = ok
+    ? `PEQ alcanzado en mes ${m.mesAp+1} con ${fP(m.vAcum*100)} de unidades vendidas. Crédito desembolsado en ${inp.tramos} tramos desde ese mes hasta fin de obra.`
+    : `ATENCIÓN: absorción proyectada ${fP(m.vAcum*100)} no alcanza el PEQ del ${fP(inp.peq*100)}. El banco no abrirá el crédito. El proyecto debe financiarse 100% con equity.`;
+}
+
+function renderKPIs(inp, m) {
+  document.getElementById('k-util').textContent = fM(m.uN);
+  document.getElementById('k-marg').textContent = 'Margen neto: ' + fP(m.mN*100);
+  const tir = Math.pow(m.MOIC, 12/inp.dtotal) - 1;
+  document.getElementById('k-tir').textContent  = fP(tir*100);
+  document.getElementById('k-vpn').textContent  = fM(calcVPN([-m.eqInv,...m.flujoNeto], inp.tvpn));
+  document.getElementById('k-vpns').textContent = '@ ' + fP(inp.tvpn*100);
+  document.getElementById('k-cred').textContent = fM(m.montoCred);
+  document.getElementById('k-cred-sub').textContent = m.vAcum >= inp.peq ? 'PEQ ✓ Mes '+(m.mesAp+1) : 'PEQ no alcanzado ✗';
+  document.getElementById('k-pico').textContent = fM(m.picoEq);
+  document.getElementById('k-pico-mes').textContent = 'Mes ' + m.mesPico;
+  document.getElementById('k-pb').textContent = m.payback ? 'Mes '+m.payback : 'No alcanza';
+}
+
+function renderBanner(inp, m, fin) {
+  const ratio = fin.cTP > 0 ? m.picoEq / fin.cTP : 0;
+  const ok    = m.vAcum >= inp.peq;
+  let cls, title, body;
+  if (!ok) {
+    cls='pb-red'; title='Crédito constructor no se abre — absorción insuficiente';
+    body=`La absorción proyectada (<strong>${fP(m.vAcum*100)}</strong>) no alcanza el punto de equilibrio del banco (<strong>${fP(inp.peq*100)}</strong>). El proyecto debe financiarse 100% con equity. Pico de exposición: <strong>${fM(m.picoEq)}</strong>.`;
+  } else if (ratio > 0.55) {
+    cls='pb-amber'; title='Equity requerido elevado — monitorear estructura';
+    body=`Pico equity: <strong>${fM(m.picoEq)}</strong> en mes ${m.mesPico} (${fP(ratio*100)} del costo total). El crédito constructor alivia la brecha. Intereses del crédito: <strong>${fM(m.totalInt)}</strong>.`;
+  } else {
+    cls='pb-green'; title='Estructura de financiamiento saludable';
+    body=`Equity pico: <strong>${fM(m.picoEq)}</strong> — crédito abre mes ${m.mesAp+1} y cubre <strong>${fP(inp.pfinc*100)}</strong> del costo directo. Intereses totales: <strong>${fM(m.totalInt)}</strong>.`;
+  }
+  document.getElementById('pico-banner').innerHTML = `<div class="pico-banner ${cls}"><div class="pb-title">${title}</div><div class="pb-body">${body}</div></div>`;
+}
+
+function renderAlerts(inp, m, fin) {
+  const tir = Math.pow(m.MOIC, 12/inp.dtotal) - 1;
+  const al = [];
+  if (m.vAcum < inp.peq) al.push({t:'red',   m:`Absorción (${fP(m.vAcum*100)}) insuficiente para abrir crédito constructor. El proyecto debe financiarse 100% con equity.`, f:''});
+  if (tir < 0)           al.push({t:'red',   m:`TIR negativa (${fP(tir*100)}). El proyecto destruye valor incluyendo el costo de la deuda.`, f:'Ajusta precios o reduce costos directos.'});
+  else if (tir < inp.hurdle) al.push({t:'amber', m:`TIR (${fP(tir*100)}) por debajo del hurdle LP (${fP(inp.hurdle*100)}).`, f:'El LP no alcanza su retorno preferido.'});
+  if (m.totalInt > fin.cC * 0.15) al.push({t:'amber', m:`Intereses del crédito constructor (${fM(m.totalInt)}) superan el 15% del costo directo.`, f:'Negocia mejor tasa o reduce el plazo de obra.'});
+  if (m.vAcum < 0.80)   al.push({t:'amber', m:`Absorción proyectada ${fP(m.vAcum*100)} de unidades. Riesgo de no alcanzar PEQ.`, f:'Ajusta la curva de absorción o la velocidad de ventas.'});
+  if (inp.salPct > 0.70) al.push({t:'amber', m:`Saldo a la entrega es ${fP(inp.salPct*100)}% del precio. Alta dependencia del crédito hipotecario del comprador.`, f:''});
+  if (!m.payback)        al.push({t:'red',   m:'El flujo acumulado no cruza a positivo en el horizonte del proyecto.', f:''});
+  if (tir > inp.hurdle + 0.10) al.push({t:'green', m:`TIR (${fP(tir*100)}) supera el hurdle en más de 10 pp con costo de deuda incluido. Proyecto en zona sólida.`, f:''});
+  document.getElementById('alerts-area').innerHTML = al.map(a =>
+    `<div class="al al-${a.t}"><div class="al-icon">${a.t==='red'?'✕':a.t==='amber'?'⚠':'✓'}</div><div>${a.m}${a.f?` <em style="opacity:.8">${a.f}</em>`:''}</div></div>`
+  ).join('');
+}
+
+function erRow(l, v, bold, neg, green) {
+  const col = green ? 'color:#0f6e56' : neg ? 'color:#a32d2d' : '';
+  return `<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:.5px solid var(--border);${bold?'font-weight:500':''}"><span style="color:var(--text-secondary)">${l}</span><span style="${col}">${fM(v)}</span></div>`;
+}
+
+function renderER(inp, prog, fin, m) {
+  document.getElementById('er-content').innerHTML =
+    erRow('Ingresos totales', m.ingTot, 1) +
+    erRow('  Separaciones', m.ingSep.reduce((a,b)=>a+b,0)) +
+    erRow('  Cuotas CI durante obra', m.ingCI.reduce((a,b)=>a+b,0)) +
+    erRow('  Saldo a la entrega', m.ingSal.reduce((a,b)=>a+b,0)) +
+    erRow('Terreno', -prog.cT, 0, 1) +
+    erRow('Costo directo construcción', -fin.cC, 0, 1) +
+    erRow('Costos indirectos', -fin.cI, 0, 1) +
+    erRow('Utilidad bruta', m.uBruta, 1) +
+    erRow('Gastos comerciales', -fin.gC, 0, 1) +
+    erRow('Gastos administrativos', -fin.gA, 0, 1) +
+    erRow('Intereses crédito constructor', -m.totalInt, 0, 1) +
+    erRow('Utilidad antes de impuestos', m.uAI, 1) +
+    erRow('Impuesto a la renta', -m.impM, 0, 1) +
+    erRow('Utilidad neta', m.uN, 1, 0, 1);
+
+  document.getElementById('ir-content').innerHTML = [
+    ['Costo total proyecto', fM(fin.cTP)],
+    ['Equity pico requerido (real)', fM(m.eqInv)],
+    ['Crédito constructor', fM(m.montoCred)],
+    ['Intereses totales crédito', fM(m.totalInt)],
+    ['Margen bruto', fP(m.mB*100)],
+    ['Margen neto', fP(m.mN*100)],
+    ['MOIC sobre equity', m.MOIC.toFixed(2)+'x'],
+    ['Payback equity', m.payback ? 'Mes '+m.payback : '—']
+  ].map(([l,v]) =>
+    `<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:.5px solid var(--border)"><span style="color:var(--text-secondary)">${l}</span><span style="font-weight:500">${v}</span></div>`
+  ).join('');
+}
+
+function renderWF(inp, m) {
+  const wf = calcWF(inp, m); const max = wf.disp || 1;
+  const bars = [
+    {l:'Capital LP devuelto',                        v:wf.dLP, c:'#2a78d6'},
+    {l:'Capital GP devuelto',                        v:wf.dGP, c:'#4a3aa7'},
+    {l:'Retorno preferido LP',                       v:wf.pLP, c:'#1baf7a'},
+    {l:`Upside LP (${Math.round((1-inp.gpsplit)*100)}%)`, v:wf.uLP, c:'#0f6e56'},
+    {l:`Upside GP (${Math.round(inp.gpsplit*100)}%)`,     v:wf.uGP, c:'#eda100'}
+  ];
+  document.getElementById('wf-content').innerHTML =
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.75rem">` +
+    [['Capital LP aportado',      fM(wf.lpC)],  ['Capital GP aportado',   fM(wf.gpC)],
+     ['Hurdle LP (retorno pref.)',fM(wf.hAmt)], ['Disponible a distribuir',fM(wf.disp)],
+     ['Total LP recibe',          fM(wf.tLP)],  ['Total GP recibe',        fM(wf.tGP)],
+     ['TIR neta LP',              fP(wf.tirLP*100)], ['TIR neta GP',       fP(wf.tirGP*100)]]
+    .map(([l,v]) => `<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:.5px solid var(--border)"><span style="color:var(--text-secondary)">${l}</span><span style="font-weight:500">${v}</span></div>`)
+    .join('') + '</div>' +
+    bars.map(b =>
+      `<div class="wf-step"><div class="wf-lbl">${b.l}</div><div class="wf-track"><div class="wf-fill" style="width:${Math.min(100,b.v/max*100).toFixed(1)}%;background:${b.c}">${b.v>max*.04?fM(b.v):''}</div></div><div class="wf-val">${fM(b.v)}</div></div>`
+    ).join('');
+}
+
+function renderSens(inp, prog) {
+  const pd = [-0.20,-0.10,0,0.10,0.20];
+  const rd = [-0.40,-0.20,0,0.20,0.40];
+  let h = `<table><thead><tr><th>Ritmo \\ Precio</th>`;
+  pd.forEach(p => h += `<th>${p>=0?'+':''}${Math.round(p*100)}%</th>`);
+  h += '</tr></thead><tbody>';
+  rd.forEach(r => {
+    h += `<tr><td>${r>=0?'+':''}${Math.round(r*100)}% ritmo</td>`;
+    pd.forEach(p => {
+      const f2 = calcFin(inp, prog, 1+p);
+      const m2 = calcModel(inp, prog, f2);
+      const tir = Math.pow(m2.MOIC, 12/inp.dtotal) - 1;
+      const c = tir > inp.hurdle ? 'sg2' : tir > 0 ? 'sm2' : 'sb2';
+      h += `<td><span class="sc-cell ${c}">${fP(tir*100)}</span></td>`;
+    });
+    h += '</tr>';
+  });
+  document.getElementById('sens-content').innerHTML = h + '</tbody></table>';
+}
+
+function renderScen(inp, prog, m) {
+  const sc = [{l:'Pesimista',cl:'sc-p',pM:0.85},{l:'Base',cl:'sc-b',pM:1},{l:'Optimista',cl:'sc-o',pM:1.12}];
+  let h = '<div class="scen-grid">';
+  sc.forEach(s => {
+    const f2  = calcFin(inp, prog, s.pM);
+    const m2  = calcModel(inp, prog, f2);
+    const wf2 = calcWF(inp, m2);
+    const tir = Math.pow(m2.MOIC, 12/inp.dtotal) - 1;
+    const vpn = calcVPN([-m2.eqInv,...m2.flujoNeto], inp.tvpn);
+    const viable = tir > inp.hurdle ? 'v' : tir > 0 ? 'm' : 'n';
+    const vl     = tir > inp.hurdle ? 'VIABLE' : tir > 0 ? 'MARGINAL' : 'NO VIABLE';
+    h += `<div class="sc ${s.cl}"><div class="sc-title">${s.l}</div>
+      ${sr('Precio/m²', fM(Math.round(inp.pv*s.pM)))}
+      ${sr('Utilidad neta', fM(m2.uN))}
+      ${sr('TIR inversionista', fP(tir*100))}
+      ${sr('VPN', fM(vpn))}
+      ${sr('Crédito constructor', fM(m2.montoCred))}
+      ${sr('Intereses', fM(m2.totalInt))}
+      ${sr('Pico equity', fM(m2.picoEq))}
+      ${sr('TIR LP', fP(wf2.tirLP*100))}
+      ${sr('TIR GP', fP(wf2.tirGP*100))}
+      ${sr('PEQ alcanzado', m2.vAcum >= inp.peq ? 'Sí ✓' : 'No ✗')}
+      <span class="badge b${viable}">${vl}</span></div>`;
+  });
+  document.getElementById('scen-content').innerHTML = h + '</div>';
+}
+function sr(l,v){ return `<div class="sc-row">${l} <strong>${v}</strong></div>`; }
+
+// ── Formato de sliders ────────────────────────────────────────────
+// Valores grandes (pterre, pv, pe, csr, csot) se formatean con separadores COP
+const copSliders = new Set(['pterre','pv','pe','csr','csot']);
+function fmtSlider(id, raw) {
+  if (copSliders.has(id)) return Math.round(raw).toLocaleString('es-CO');
+  return parseFloat(raw).toLocaleString('es', {maximumFractionDigits:1});
+}
+
+// ── Loop principal ────────────────────────────────────────────────
+function update() {
+  const inp  = getInp();
+  const prog = calcProg(inp);
+  const fin  = calcFin(inp, prog);
+  const m    = calcModel(inp, prog, fin);
+  renderCredPanel(inp, prog, fin, m);
+  renderKPIs(inp, m);
+  renderBanner(inp, m, fin);
+  renderAlerts(inp, m, fin);
+  renderER(inp, prog, fin, m);
+  renderWF(inp, m);
+  renderSens(inp, prog);
+  renderScen(inp, prog, m);
+  if (document.getElementById('tab-financiamiento').classList.contains('active')) { renderChartFin(m); renderChartCred(m); }
+  if (document.getElementById('tab-ingresos').classList.contains('active'))  renderChartIng(m);
+  if (document.getElementById('tab-flujos').classList.contains('active'))    renderChartFlujos(m);
+  // Actualizar subtítulo con moneda activa
+  document.getElementById('main-sub').textContent =
+    activeCur === 'COP'
+      ? 'Colombia · COP · Preventa escalonada · Crédito constructor · Curva S · Waterfall LP/GP'
+      : `Colombia · USD (TRM ${getTRM().toLocaleString('es-CO')}) · Preventa escalonada · Crédito constructor`;
+}
+
+document.querySelectorAll('input[type=range]').forEach(el => {
+  el.addEventListener('input', () => {
+    const vEl = document.getElementById('v-' + el.id);
+    if (vEl) vEl.textContent = fmtSlider(el.id, el.value);
+    update();
+  });
+});
+
+document.getElementById('trm').addEventListener('input', () => update());
+
+// Arrancar en COP
+update();
+</script>
+</body>
+</html>
