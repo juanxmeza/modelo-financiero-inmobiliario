@@ -275,6 +275,7 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
     <button class="tn" onclick="showTab('waterfall',this)">Waterfall LP/GP</button>
     <button class="tn" onclick="showTab('sensibilidad',this)">Sensibilidad</button>
     <button class="tn" onclick="showTab('escenarios',this)">Escenarios</button>
+    <button class="tn" onclick="showTab('riesgo',this)">🎲 Riesgo (Monte Carlo)</button>
   </div>
 
   <div class="tc active" id="tab-financiamiento">
@@ -344,6 +345,27 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
 
   <div class="tc" id="tab-escenarios">
     <div class="panel"><div class="pt"><span class="dot da"></span>Comparador de escenarios — pesimista · base · optimista</div><div id="scen-content"></div></div>
+  </div>
+  <div class="tc" id="tab-riesgo">
+    <div class="panel">
+      <div class="pt"><span class="dot db"></span>Simulación de riesgo (Monte Carlo)</div>
+      <p style="font-size:11px;color:var(--text-secondary);margin-bottom:.6rem">Marca qué variables son inciertas y su rango (<b>mínimo · más probable · máximo</b>). La app recalcula el proyecto miles de veces y te entrega la <b>distribución</b> de la TIR y el VPN —no un solo número— y la <b>probabilidad</b> de superar el hurdle. Los rangos vienen precargados desde tus supuestos actuales; ajústalos a tu criterio.</p>
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="text-align:left;border-bottom:1px solid var(--border)">
+          <th style="padding:4px 6px">Variar</th><th>Variable</th><th>Distribución</th><th>Mínimo</th><th>Más probable</th><th>Máximo</th>
+        </tr></thead><tbody id="mc-tbody"></tbody>
+      </table>
+      </div>
+      <div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-top:.7rem">
+        <div class="f" style="margin:0"><label>Iteraciones</label><select id="mc-iter"><option>2000</option><option selected>5000</option><option>10000</option><option>20000</option></select></div>
+        <div class="f" style="margin:0"><label>Semilla (opcional)</label><input type="number" id="mc-seed" placeholder="Aleatoria" style="width:100px"></div>
+        <button class="cb" id="mc-recargar" style="padding:6px 12px">🔄 Recargar rangos base</button>
+        <button class="cb active" id="mc-run" style="padding:6px 16px">▶ Simular</button>
+      </div>
+      <div id="mc-error" style="color:#e34948;font-size:11px;margin-top:5px"></div>
+      <div id="mc-salida" style="margin-top:.9rem"></div>
+    </div>
   </div>
 </div>
 </div>
@@ -865,6 +887,122 @@ document.getElementById('trm').addEventListener('input', () => update());
 
 // Arrancar en COP
 update();
+
+/* ================= Simulación de riesgo (Monte Carlo) sobre el modelo financiero ================= */
+(function(){
+  function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  function rNorm(rng){ let u=0,v=0; while(u===0)u=rng(); while(v===0)v=rng(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+  function rGamma(a,rng){ if(a<1){ const u=rng()||1e-12; return rGamma(1+a,rng)*Math.pow(u,1/a); } const d=a-1/3,c=1/Math.sqrt(9*d); for(;;){ let x,v; do{ x=rNorm(rng); v=1+c*x; }while(v<=0); v=v*v*v; const u=rng(); if(u<1-0.0331*x*x*x*x) return d*v; if(Math.log(u)<0.5*x*x+d*(1-v+Math.log(v))) return d*v; } }
+  function rBeta(a,b,rng){ const x=rGamma(a,rng), y=rGamma(b,rng); return x/(x+y); }
+  function rTri(a,m,b,rng){ const u=rng(), fc=(m-a)/(b-a); return u<fc ? a+Math.sqrt(u*(b-a)*(m-a)) : b-Math.sqrt((1-u)*(b-a)*(b-m)); }
+  function muestra(d,rng){ if(d.tipo==='pert'){ const al=1+4*(d.moda-d.min)/(d.max-d.min), be=1+4*(d.max-d.moda)/(d.max-d.min); return d.min+(d.max-d.min)*rBeta(al,be,rng); } return rTri(d.min,d.moda,d.max,rng); }
+  function salidasDe(inp){ const prog=calcProg(inp), fin=calcFin(inp,prog), m=calcModel(inp,prog,fin), wf=calcWF(inp,m);
+    return { tir:Math.pow(m.MOIC,12/inp.dtotal)-1, vpn:calcVPN([-m.eqInv,...m.flujoNeto],inp.tvpn), tirLP:wf.tirLP, tirGP:wf.tirGP }; }
+  const DRIVERS=[
+    {key:'pv',label:'Precio de venta',unidad:'COP/m²',f:1,dec:0,lo:0.85,hi:1.15},
+    {key:'csr',label:'Costo construcción (sobre rasante)',unidad:'COP/m²',f:1,dec:0,lo:0.90,hi:1.15},
+    {key:'csot',label:'Costo sótano',unidad:'COP/m²',f:1,dec:0,lo:0.90,hi:1.15},
+    {key:'ciind',label:'Costos indirectos',unidad:'%',f:100,dec:1,lo:0.85,hi:1.20},
+    {key:'rpico',label:'Ritmo pico de absorción',unidad:'%/mes',f:100,dec:1,lo:0.70,hi:1.20},
+    {key:'tcred',label:'Tasa crédito constructor',unidad:'% anual',f:100,dec:1,lo:0.85,hi:1.20},
+    {key:'retraso',label:'Retraso inicio de ventas',unidad:'meses',f:1,dec:0,lo:0,hi:0}
+  ];
+  function q(sel){ return document.querySelector(sel); }
+  function pintarTabla(){
+    if(!document.getElementById('mc-tbody')) return;
+    const inp=getInp();
+    document.getElementById('mc-tbody').innerHTML = DRIVERS.map(function(d,i){
+      const bd=inp[d.key]*d.f; let mn,mo,mx;
+      if(d.key==='retraso'){ mn=0; mo=Math.round(bd); mx=Math.round(bd)+3; }
+      else { mn=+(bd*d.lo).toFixed(d.dec); mo=+bd.toFixed(d.dec); mx=+(bd*d.hi).toFixed(d.dec); }
+      return '<tr style="border-bottom:.5px solid var(--border)">'+
+        '<td style="text-align:center;padding:3px 6px"><input type="checkbox" class="mc-on" data-i="'+i+'"></td>'+
+        '<td style="padding:3px 6px">'+d.label+' <span style="color:var(--text-muted)">('+d.unidad+')</span></td>'+
+        '<td><select class="mc-dist" data-i="'+i+'"><option value="pert">PERT</option><option value="tri">Triangular</option></select></td>'+
+        '<td><input type="number" step="any" class="mc-min" data-i="'+i+'" value="'+mn+'" style="width:82px;text-align:right"></td>'+
+        '<td><input type="number" step="any" class="mc-mo" data-i="'+i+'" value="'+mo+'" style="width:82px;text-align:right"></td>'+
+        '<td><input type="number" step="any" class="mc-mx" data-i="'+i+'" value="'+mx+'" style="width:82px;text-align:right"></td>'+
+        '</tr>';
+    }).join('');
+  }
+  function pctil(sorted,p){ const n=sorted.length; if(!n)return NaN; const idx=(p/100)*(n-1),lo=Math.floor(idx),fr=idx-lo; return lo>=n-1?sorted[n-1]:sorted[lo]+(sorted[lo+1]-sorted[lo])*fr; }
+  function rank(a){ const idx=a.map(function(v,i){return i;}).sort(function(x,y){return a[x]-a[y];}); const r=new Array(a.length); for(let k=0;k<idx.length;k++) r[idx[k]]=k; return r; }
+  function spearman(x,y){ const n=x.length; const rx=rank(Array.from(x)), ry=rank(Array.from(y)); const mu=(n-1)/2; let sxy=0,sxx=0,syy=0; for(let i=0;i<n;i++){ const a=rx[i]-mu,b=ry[i]-mu; sxy+=a*b; sxx+=a*a; syy+=b*b; } return (sxx>0&&syy>0)?sxy/Math.sqrt(sxx*syy):0; }
+  function histCanvas(id, data, hurdle){
+    const c=document.getElementById(id); if(!c)return; const ctx=c.getContext('2d'); const W=c.width=c.clientWidth||760, H=c.height=240;
+    ctx.clearRect(0,0,W,H);
+    const s=Float64Array.from(data).sort(); const lo=s[0], hi=s[s.length-1]; const nb=40; const bw=(hi-lo)/nb||1;
+    const bins=new Array(nb).fill(0); for(let i=0;i<s.length;i++){ let k=Math.floor((s[i]-lo)/bw); if(k<0)k=0; if(k>=nb)k=nb-1; bins[k]++; }
+    const mx=Math.max.apply(null,bins)||1; const padL=40,padB=26,padT=10,padR=10;
+    ctx.fillStyle='#2a78d6';
+    for(let k=0;k<nb;k++){ const x=padL+(W-padL-padR)*k/nb, w=(W-padL-padR)/nb-1, h=(H-padB-padT)*bins[k]/mx; ctx.fillRect(x,H-padB-h,w,h); }
+    ctx.strokeStyle='#cbd5e1'; ctx.beginPath(); ctx.moveTo(padL,H-padB); ctx.lineTo(W-padR,H-padB); ctx.stroke();
+    if(isFinite(hurdle) && hurdle>=lo && hurdle<=hi){ const xh=padL+(W-padL-padR)*(hurdle-lo)/(hi-lo); ctx.strokeStyle='#e34948'; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(xh,padT); ctx.lineTo(xh,H-padB); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle='#e34948'; ctx.font='10px system-ui'; ctx.fillText('hurdle', xh+3, padT+9); }
+    ctx.fillStyle='#64748b'; ctx.font='10px system-ui'; ctx.textAlign='left'; ctx.fillText(fP(lo*100), padL, H-8); ctx.textAlign='right'; ctx.fillText(fP(hi*100), W-padR, H-8);
+  }
+  function simular(){
+    const err=document.getElementById('mc-error'); err.textContent='';
+    const inp0=getInp();
+    const act=[];
+    document.querySelectorAll('.mc-on').forEach(function(cb){ if(cb.checked){ const i=+cb.dataset.i, d=DRIVERS[i];
+      act.push({ key:d.key, label:d.label, tipo:q('.mc-dist[data-i="'+i+'"]').value,
+        min:parseFloat(q('.mc-min[data-i="'+i+'"]').value)/d.f, moda:parseFloat(q('.mc-mo[data-i="'+i+'"]').value)/d.f, max:parseFloat(q('.mc-mx[data-i="'+i+'"]').value)/d.f }); } });
+    if(!act.length){ err.textContent='Marca al menos una variable para variar (casilla «Variar»).'; return; }
+    for(const a of act){ if(!(a.min<=a.moda && a.moda<=a.max && a.min<a.max)){ err.textContent='En «'+a.label+'»: se requiere mínimo ≤ más probable ≤ máximo (y mínimo < máximo).'; return; } }
+    const N=Math.round(parseFloat(document.getElementById('mc-iter').value))||5000;
+    const st=(document.getElementById('mc-seed').value||'').trim();
+    const rng=mulberry32(st!==''?(Math.round(parseFloat(st))|0):((Math.random()*2**31)|0));
+    const btn=document.getElementById('mc-run'); btn.disabled=true; const tx=btn.textContent; btn.textContent='⏳ Calculando…';
+    setTimeout(function(){
+     try{
+      const tir=new Float64Array(N), vpn=new Float64Array(N), tlp=new Float64Array(N), tgp=new Float64Array(N);
+      const drv=act.map(function(){return new Float64Array(N);});
+      let nOK=0;
+      for(let it=0; it<N; it++){ const inp=Object.assign({},inp0);
+        for(let j=0;j<act.length;j++){ const v=muestra(act[j],rng); inp[act[j].key]=v; drv[j][it]=v; }
+        const o=salidasDe(inp); tir[it]=o.tir; vpn[it]=o.vpn; tlp[it]=o.tirLP; tgp[it]=o.tirGP; if(isFinite(o.tir))nOK++;
+      }
+      const tS=Float64Array.from(tir).filter(isFinite).sort(), vS=Float64Array.from(vpn).filter(isFinite).sort();
+      const media=function(a){let s=0;for(let i=0;i<a.length;i++)s+=a[i];return s/a.length;};
+      const hurdle=inp0.hurdle;
+      let pOverH=0; for(let i=0;i<tir.length;i++) if(isFinite(tir[i])&&tir[i]>=hurdle) pOverH++; pOverH/=tir.length;
+      let pVpnPos=0; for(let i=0;i<vpn.length;i++) if(isFinite(vpn[i])&&vpn[i]>0) pVpnPos++; pVpnPos/=vpn.length;
+      // tornado
+      const torn=act.map(function(a,j){ return {label:a.label, r:spearman(drv[j], tir)}; }).sort(function(x,y){return Math.abs(y.r)-Math.abs(x.r);});
+      const sAbs=torn.reduce(function(s,x){return s+Math.abs(x.r);},0)||1;
+      function kpi(l,v,s){ return '<div class="kpi"><div class="kl">'+l+'</div><div class="kv blue">'+v+'</div><div class="ks">'+(s||'')+'</div></div>'; }
+      let html='<div class="kpi-row">'+
+        kpi('TIR media', fP(media(tS)*100), 'sobre equity · anual')+
+        kpi('TIR P10 (pesimista)', fP(pctil(tS,10)*100),'1 de cada 10 peor')+
+        kpi('TIR P50 (mediana)', fP(pctil(tS,50)*100),'escenario central')+
+        kpi('TIR P90 (optimista)', fP(pctil(tS,90)*100),'1 de cada 10 mejor')+
+        '</div>';
+      html+='<div class="kpi-row" style="margin-top:.5rem">'+
+        '<div class="kpi" style="border-color:'+(pOverH>=0.75?'#1baf7a':(pOverH>=0.5?'#eda100':'#e34948'))+'"><div class="kl">P( TIR ≥ hurdle '+fP(hurdle*100)+' )</div><div class="kv" style="color:'+(pOverH>=0.75?'#1baf7a':(pOverH>=0.5?'#c98a00':'#e34948'))+'">'+fP(pOverH*100)+'</div><div class="ks">probabilidad de batir el hurdle</div></div>'+
+        kpi('VPN medio', fM(media(vS)), '@ '+fP(inp0.tvpn*100))+
+        kpi('VPN P50', fM(pctil(vS,50)),'mediana')+
+        '<div class="kpi" style="border-color:'+(pVpnPos>=0.75?'#1baf7a':'#eda100')+'"><div class="kl">P( VPN &gt; 0 )</div><div class="kv" style="color:'+(pVpnPos>=0.75?'#1baf7a':'#c98a00')+'">'+fP(pVpnPos*100)+'</div><div class="ks">crea valor</div></div>'+
+        '</div>';
+      html+='<div style="font-size:11px;color:var(--text-muted);margin:.7rem 0 .2rem">Distribución de la TIR ('+N.toLocaleString('es')+' iteraciones · '+nOK+' válidas). Línea roja = hurdle.</div>';
+      html+='<canvas id="mc-hist" style="width:100%;height:240px;background:var(--surface-0);border-radius:8px;border:.5px solid var(--border)"></canvas>';
+      html+='<div style="font-size:11px;color:var(--text-muted);margin:.8rem 0 .3rem">Sensibilidad (tornado) — qué variable mueve más la TIR:</div>';
+      html+='<div>'+torn.map(function(x){ const p=Math.abs(x.r)/sAbs; const w=Math.round(Math.abs(x.r)*100);
+        return '<div style="display:flex;align-items:center;gap:8px;margin:2px 0;font-size:11px"><div style="width:190px;text-align:right;color:var(--text-secondary)">'+x.label+'</div><div style="flex:1;background:var(--surface-0);border-radius:4px;overflow:hidden"><div style="height:14px;width:'+w+'%;background:'+(x.r>=0?'#2a78d6':'#e34948')+'"></div></div><div style="width:96px">r='+x.r.toFixed(2)+' · '+fP(p*100)+'</div></div>'; }).join('')+'</div>';
+      document.getElementById('mc-salida').innerHTML=html;
+      histCanvas('mc-hist', tS, hurdle);
+     } catch(e){ err.textContent='Error en la simulación: '+e.message; }
+     finally{ btn.disabled=false; btn.textContent=tx; }
+    }, 25);
+  }
+  function wire(){
+    const r=document.getElementById('mc-run'); if(!r) return false;
+    r.addEventListener('click', simular);
+    const rc=document.getElementById('mc-recargar'); if(rc) rc.addEventListener('click', function(){ pintarTabla(); document.getElementById('mc-error').textContent='Rangos recargados desde tus supuestos actuales.'; });
+    pintarTabla();
+    return true;
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+})();
 </script>
 </body>
 </html>
