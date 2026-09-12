@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Modelo Financiero Inmobiliario · Arquitectura",
+    "output": "arquitectura.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "flujo",
+        "label": "Supuestos → flujo → indicadores",
+        "focus": [
+          "usuario",
+          "form",
+          "flujo",
+          "kpi"
+        ],
+        "note": "Los supuestos del proyecto alimentan el flujo de caja mensual; de ahí salen TIR, VPN y la sensibilidad."
+      }
+    ]
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [
+      40,
+      80
+    ],
+    "cols": 4,
+    "gapX": 110,
+    "gapY": 84,
+    "cellW": 170,
+    "cellH": 66
+  },
+  "components": [
+    {
+      "id": "usuario",
+      "type": "external",
+      "label": "Promotor / evaluador",
+      "sublabel": "modelo.inicon.com.co",
+      "row": 1,
+      "col": 0,
+      "size": [
+        170,
+        66
+      ]
+    },
+    {
+      "id": "form",
+      "type": "frontend",
+      "label": "Supuestos",
+      "sublabel": "ventas · preventa · costos · crédito",
+      "row": 1,
+      "col": 1,
+      "size": [
+        170,
+        66
+      ]
+    },
+    {
+      "id": "flujo",
+      "type": "backend",
+      "label": "Flujo de caja",
+      "sublabel": "mensual · financiación · escenarios",
+      "row": 1,
+      "col": 2,
+      "size": [
+        170,
+        66
+      ]
+    },
+    {
+      "id": "kpi",
+      "type": "frontend",
+      "label": "Indicadores",
+      "sublabel": "TIR · VPN · sensibilidad · tornado",
+      "row": 1,
+      "col": 3,
+      "size": [
+        170,
+        66
+      ]
+    },
+    {
+      "id": "chart",
+      "type": "external",
+      "label": "Chart.js (cdnjs)",
+      "sublabel": "gráficas",
+      "row": 0,
+      "col": 3,
+      "size": [
+        170,
+        66
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "GitHub Pages · un solo HTML · CC BY-SA 4.0",
+      "wraps": [
+        "form",
+        "flujo",
+        "kpi"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "usuario-form",
+      "from": "usuario",
+      "to": "form",
+      "label": "supuestos",
+      "variant": "emphasis"
+    },
+    {
+      "id": "form-flujo",
+      "from": "form",
+      "to": "flujo",
+      "label": "recalcular",
+      "variant": "emphasis"
+    },
+    {
+      "id": "flujo-kpi",
+      "from": "flujo",
+      "to": "kpi",
+      "label": "TIR · VPN",
+      "variant": "emphasis"
+    },
+    {
+      "id": "chart-kpi",
+      "from": "chart",
+      "to": "kpi",
+      "label": "render",
+      "variant": "dashed",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Qué modela",
+      "items": [
+        "Preventas, cronograma de ventas y costos, crédito constructor",
+        "Escenarios y sensibilidad sobre TIR y VPN"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Publicación",
+      "items": [
+        "Público, sin servidor ni cuenta",
+        "Única dependencia externa: Chart.js desde cdnjs"
+      ]
+    }
+  ]
+}
