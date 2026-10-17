@@ -1,0 +1,5 @@
+# Modelo Financiero Inmobiliario de INICON — herramienta pública.
+User-agent: *
+Allow: /
+
+Sitemap: https://modelo.inicon.com.co/sitemap.xml
