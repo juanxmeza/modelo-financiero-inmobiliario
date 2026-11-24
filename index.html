@@ -194,7 +194,6 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
     <div class="f"><label>Punto equilibrio ventas p/ apertura (%) <span class="val" id="v-peq">65</span>%</label><input type="range" id="peq" min="40" max="90" step="5" value="65"></div>
     <div class="f"><label>% costo directo financiado por banco <span class="val" id="v-pfinc">70</span>%</label><input type="range" id="pfinc" min="40" max="90" step="5" value="70"></div>
     <div class="f"><label>Tasa crédito constructor (% anual) <span class="val" id="v-tcred">14</span>%</label><input type="range" id="tcred" min="8" max="25" step="0.5" value="14"></div>
-    <div class="f"><label>Tramos de desembolso <span class="val" id="v-tramos">10</span></label><input type="range" id="tramos" min="3" max="20" step="1" value="10"></div>
   </div>
 
   <div class="sg">
@@ -205,7 +204,7 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
       <button class="cb" onclick="setCurva('lenta',this)">Lento</button>
       <button class="cb" onclick="setCurva('lineal',this)">Lineal</button>
     </div>
-    <div class="f"><label>Ritmo pico (% unidades/mes) <span class="val" id="v-rpico">8</span>%</label><input type="range" id="rpico" min="1" max="20" step="0.5" value="8"></div>
+    <div class="f"><label>Ritmo pico (% unidades/mes) <span class="val" id="v-rpico">12</span>%</label><input type="range" id="rpico" min="1" max="20" step="0.5" value="12"></div>
     <div class="f"><label>Mes del pico de ventas <span class="val" id="v-mpico">4</span></label><input type="range" id="mpico" min="1" max="18" step="1" value="4"></div>
     <div class="f"><label>Retraso inicio ventas (meses) <span class="val" id="v-retraso">0</span></label><input type="range" id="retraso" min="0" max="12" step="1" value="0"></div>
   </div>
@@ -220,7 +219,7 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
   <div class="sg">
     <div class="sl"><span class="dot dr"></span>Comercial y financiero</div>
     <div class="f"><label>Gastos comerciales (% ventas) <span class="val" id="v-gc">5.5</span>%</label><input type="range" id="gc" min="1" max="12" step="0.5" value="5.5"></div>
-    <div class="f"><label>Gastos administrativos (% ventas) <span class="val" id="v-ga">2</span>%</label><input type="range" id="ga" min="0.5" max="6" step="0.5" value="2"></div>
+    <div class="f"><label>Gastos administrativos fijos (% ventas totales) <span class="val" id="v-ga">2</span>%</label><input type="range" id="ga" min="0.5" max="6" step="0.5" value="2"></div>
     <div class="f"><label>Equity GP+LP (% costo total) <span class="val" id="v-equity">40</span>%</label><input type="range" id="equity" min="20" max="100" step="5" value="40"></div>
     <div class="f"><label>Impuesto a la renta (%) <span class="val" id="v-imp">33</span>%</label><input type="range" id="imp" min="10" max="40" step="0.5" value="33"></div>
     <div class="f"><label>Tasa descuento VPN (% anual) <span class="val" id="v-tvpn">12</span>%</label><input type="range" id="tvpn" min="5" max="25" step="0.5" value="12"></div>
@@ -250,7 +249,7 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
 
   <div class="kpi-row">
     <div class="kpi"><div class="kl">Utilidad neta</div><div class="kv green" id="k-util">—</div><div class="ks" id="k-marg">—</div></div>
-    <div class="kpi"><div class="kl">TIR inversionista</div><div class="kv blue" id="k-tir">—</div><div class="ks">sobre equity · anual</div></div>
+    <div class="kpi"><div class="kl">TIR inversionista</div><div class="kv blue" id="k-tir">—</div><div class="ks">tasa interna del flujo · anual</div></div>
     <div class="kpi"><div class="kl">VPN</div><div class="kv blue" id="k-vpn">—</div><div class="ks" id="k-vpns">—</div></div>
     <div class="kpi" style="border-color:#0284c7"><div class="kl" style="color:#0369a1">Crédito constructor</div><div class="kv sky" id="k-cred">—</div><div class="ks" id="k-cred-sub">—</div></div>
     <div class="kpi" style="border-color:#e34948"><div class="kl" style="color:#a32d2d">Pico equity requerido</div><div class="kv red" id="k-pico">—</div><div class="ks" id="k-pico-mes">—</div></div>
@@ -282,7 +281,7 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
     <div class="panel">
       <div class="pt"><span class="dot dc"></span>Fuentes de caja mes a mes — equity · crédito constructor · preventa</div>
       <div class="legend">
-        <span class="li"><span class="ld" style="background:#2a78d6"></span>Equity acumulado</span>
+        <span class="li"><span class="ld" style="background:#2a78d6"></span>Equity aportado y no recuperado</span>
         <span class="li"><span class="ld" style="background:#0ea5e9"></span>Crédito constructor acumulado</span>
         <span class="li"><span class="ld" style="background:#1baf7a"></span>Preventa acumulada (sep + CI)</span>
         <span class="li"><span class="ld" style="background:#e34948;opacity:.7"></span>Pico equity (mes crítico)</span>
@@ -318,7 +317,7 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
       <div class="legend">
         <span class="li"><span class="ld" style="background:#1baf7a"></span>Recaudo compradores</span>
         <span class="li"><span class="ld" style="background:#0ea5e9"></span>Desembolso crédito</span>
-        <span class="li"><span class="ld" style="background:#e34948"></span>Egresos mes (obra + gastos + pago del crédito + impuesto)</span>
+        <span class="li"><span class="ld" style="background:#e34948"></span>Egresos mes (obra + gastos + servicio del crédito + impuesto)</span>
         <span class="li"><span class="ld" style="background:#2a78d6"></span>Flujo acumulado del inversionista</span>
       </div>
       <div class="cw-xl"><canvas id="chartFlujos" role="img" aria-label="Flujo de caja neto mensual"></canvas></div>
@@ -462,7 +461,7 @@ function getInp() {
     acomun: g('acomun')/100, aestac: g('aestac'),
     pv: g('pv'), pe: g('pe'),
     sepPct: sp, ciPct: ci, salPct: sl, mesci: Math.round(g('mesci')),
-    peq: g('peq')/100, pfinc: g('pfinc')/100, tcred: g('tcred')/100, tramos: Math.round(g('tramos')),
+    peq: g('peq')/100, pfinc: g('pfinc')/100, tcred: g('tcred')/100,
     csr: g('csr'), csot: g('csot'), ciind: g('ciind')/100,
     gc: g('gc')/100, ga: g('ga')/100,
     equity: g('equity')/100, imp: g('imp')/100, tvpn: g('tvpn')/100,
@@ -543,57 +542,59 @@ function calcModel(inp, prog, fin) {
   for (let i = inp.dprev; i < finObra; i++) { costConst[i] = fin.cC/inp.dobra; costIndir[i] = fin.cI/inp.dobra; }
 
   // Crédito constructor
-  // Se distinguen tres cosas que antes se mezclaban en `mesAp`:
+  // Se distinguen tres cosas:
   //   mesUmbral   → mes real (índice) en que las ventas acumuladas alcanzan el PEQ; -1 si nunca.
   //   mesAp       → apertura elegible (índice): solo existe si el umbral se cumple dentro de la
   //                 ventana de obra; -1 si el crédito no abre.
-  //   montoDesemb → lo efectivamente desembolsado, que puede ser menor al cupo teórico (montoCred).
-  // Reglas: ningún desembolso antes de cumplir el umbral ni fuera de la ventana de obra.
-  // SUPUESTO PENDIENTE DE CONFIRMAR (ver docs/credito-constructor.md): los tramos son iguales
-  // (cupo / n.º de tramos), uno por mes como máximo; los que no caben entre la apertura y el fin
-  // de obra NO se desembolsan ni se acumulan en el último mes.
+  //   montoDesemb → lo efectivamente desembolsado frente al cupo teórico (montoCred).
+  // Desembolso contra avance de obra: en la apertura el banco gira el % financiado del costo
+  // directo ya ejecutado (incluido ese mes); después, el % financiado del costo directo de cada mes.
+  // Ningún giro ocurre antes de cumplir el umbral ni fuera de la ventana de obra.
   let mesUmbral = -1; let vAc2 = 0;
   for (let i = 0; i < N; i++) { vAc2 += unidMes[i]; if (vAc2 >= inp.peq - 1e-9) { mesUmbral = i; break; } }
-  const ultObra   = Math.min(finObra, N) - 1;            // último mes (índice) de construcción
+  const ultObra   = finObra - 1;                         // último mes (índice) de construcción
   const montoCred = fin.cC * inp.pfinc;                  // cupo teórico aprobado
   const desemb    = Array(N).fill(0);
   const credEstado = mesUmbral < 0 ? 'no_alcanzado' : mesUmbral > ultObra ? 'tardio' : 'abierto';
   const mesAp = credEstado === 'abierto' ? Math.max(mesUmbral, inp.dprev) : -1;
-  let tEmit = 0;
   if (credEstado === 'abierto') {
-    const mDisp = ultObra - mesAp + 1;
-    const mPT   = montoCred / inp.tramos;
-    const inter = Math.max(1, Math.floor(mDisp / inp.tramos));
-    for (let i = mesAp; i <= ultObra && tEmit < inp.tramos; i += inter) { desemb[i] += mPT; tEmit++; }
+    let ejecutado = 0;
+    for (let i = inp.dprev; i <= ultObra; i++) {
+      ejecutado += costConst[i];
+      if (i === mesAp) desemb[i] = inp.pfinc * ejecutado;        // se pone al día con lo ejecutado
+      else if (i > mesAp) desemb[i] = inp.pfinc * costConst[i];
+    }
   }
   const montoDesemb = desemb.reduce((a,b)=>a+b,0);
-  const cupoNoDes   = Math.max(0, montoCred - montoDesemb);
+  const giroApertura = mesAp >= 0 ? desemb[mesAp] : 0;
 
-  // Intereses sobre saldo vigente
+  // Intereses: se pagan cada mes sobre el principal vigente (sin capitalizar).
+  // El principal se cancela en el mes de la entrega, con el saldo de los compradores.
   const tMens = inp.tcred / 12;
   const saldoCred = Array(N).fill(0), intMes = Array(N).fill(0), pagoCred = Array(N).fill(0);
   const mesPago = finObra;                               // mes de la entrega (siempre dentro del horizonte)
   let saldo = 0;
   for (let i = 0; i < N; i++) {
-    saldo += desemb[i]; intMes[i] = saldo * tMens; saldo += intMes[i];
-    if (i === mesPago && saldo > 0) { pagoCred[i] = saldo; saldo = 0; }   // principal + intereses capitalizados
+    saldo += desemb[i]; intMes[i] = saldo * tMens;
+    pagoCred[i] = intMes[i];
+    if (i === mesPago && saldo > 0) { pagoCred[i] += saldo; saldo = 0; }
     saldoCred[i] = saldo;
   }
   const totalInt   = intMes.reduce((a,b)=>a+b,0);
-  const saldoFinal = finObra > 0 && finObra <= N ? saldoCred[finObra-1] : 0;
   let acPO = 0; for (let i = 0; i <= ultObra; i++) acPO += ingPreventaMes[i];
   const prevObra = acPO;                                 // recaudo de preventa (sep + CI) hasta fin de obra
 
   // Egresos operativos (sin deuda ni impuestos)
-  const gastosMes = Array(N).fill(0);
-  for (let i = inicioV; i < N; i++) { const u = unidMes[i]; if (u > 0) gastosMes[i] = (fin.gC + fin.gA) * u; }
+  // Gastos comerciales: proporcionales a lo vendido. Gastos administrativos: fijos, iguales cada mes.
+  const gastosMes = Array(N).fill(fin.gA / N);
+  for (let i = inicioV; i < N; i++) { const u = unidMes[i]; if (u > 0) gastosMes[i] += fin.gC * u; }
   const egOper = Array(N).fill(0);
   egOper[0] += prog.cT;
   for (let i = 0; i < N; i++) egOper[i] += costConst[i] + costIndir[i] + gastosMes[i];
 
-  // Estado de resultados (gastos comerciales y administrativos solo sobre lo vendido)
+  // Estado de resultados (comerciales sobre lo vendido; administrativos completos)
   const ingTot  = ingTotalMes.reduce((a,b)=>a+b,0);
-  const gCV     = fin.gC * vAcum, gAV = fin.gA * vAcum;
+  const gCV     = fin.gC * vAcum, gAV = fin.gA;
   const uBruta  = ingTot - prog.cT - fin.cC - fin.cI;
   const uAI     = uBruta - gCV - gAV - totalInt;
   const impM    = Math.max(0, uAI * inp.imp);
@@ -604,18 +605,17 @@ function calcModel(inp, prog, fin) {
 
   // Flujo de caja del inversionista (apalancado, después de impuestos):
   //   + recaudo de compradores + desembolsos del crédito
-  //   − egresos operativos − pago del crédito (principal + intereses, una sola vez) − impuesto
-  // Los intereses NO se restan mes a mes: se capitalizan en el saldo y salen en pagoCred.
+  //   − egresos operativos − servicio del crédito (intereses cada mes; principal en la entrega) − impuesto
   const egMes     = egOper.map((v,i) => v + pagoCred[i] + impMes[i]);
   const flujoNeto = ingTotalMes.map((v,i) => v + desemb[i] - egMes[i]);
   let acF = 0; const flujoAcum = flujoNeto.map(f => { acF += f; return acF; });
   let acI = 0; const ingAcum   = ingTotalMes.map(v => { acI += v; return acI; });
   let acD = 0; const desAcum   = desemb.map(d => { acD += d; return acD; });
-  let acP = 0; const prevAcum  = ingPreventaMes.map(v => { acP += v; return acP; });
 
-  // Equity requerido = brecha entre egresos (operativos + pago del crédito) y fuentes (crédito + preventa)
+  // Equity requerido = déficit acumulado del flujo del inversionista (lo que los socios han tenido
+  // que aportar y aún no recuperan). El pico es el déficit máximo.
   let acE = 0; const egAcum    = egOper.map((e,i) => { acE += e + pagoCred[i]; return acE; });
-  const equityReq = egAcum.map((e,i) => Math.max(0, e - desAcum[i] - prevAcum[i]));
+  const equityReq = flujoAcum.map(v => Math.max(0, -v));
   const picoEq    = Math.max(...equityReq, 0);
   const mesPico   = equityReq.indexOf(picoEq) + 1;
 
@@ -623,15 +623,32 @@ function calcModel(inp, prog, fin) {
   for (let i = 0; i < flujoAcum.length; i++) { if (flujoAcum[i] >= 0 && !payback) payback = i + 1; }
 
   const MOIC    = picoEq > 0 ? (picoEq + uN) / picoEq : 1;
+  const tir     = calcTIR(flujoNeto);                    // tasa interna del flujo mensual, anualizada
 
   return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, ingTotalMes, egMes, flujoNeto,
     flujoAcum, egAcum, ingAcum, egOper, pagoCred, impMes, gCV, gAV, mesPago, desemb, desAcum, saldoCred, intMes, equityReq,
-    picoEq, mesPico, montoCred, montoDesemb, cupoNoDes, tramosEmit: tEmit, credEstado, mesUmbral, mesAp,
-    prevObra, totalInt, saldoFinal, pagoTotal: pagoCred.reduce((a,b)=>a+b,0), horizonteExt, payback, vAcum,
-    N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC };
+    picoEq, mesPico, montoCred, montoDesemb, giroApertura, credEstado, mesUmbral, mesAp,
+    prevObra, totalInt, horizonteExt, payback, vAcum,
+    N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC, tir };
 }
 
 function calcVPN(cf, r) { return cf.reduce((a,v,t) => a + v / Math.pow(1 + r/12, t), 0); }
+// TIR anual del flujo mensual del inversionista: tasa mensual que anula el valor presente, anualizada.
+// Se busca la raíz más cercana a cero partiendo de la tasa 0 (donde el valor presente es la utilidad
+// neta): hacia arriba si el proyecto gana, hacia abajo si pierde. Así el impuesto del último mes
+// (un egreso final) no produce raíces espurias. Devuelve −1 (−100 %) si no se recupera nada.
+function calcTIR(cf) {
+  const vp = r => cf.reduce((a,v,t) => a + v / Math.pow(1 + r, t + 1), 0);
+  if (!cf.some(v => v > 0)) return -1;
+  const v0 = vp(0);
+  if (Math.abs(v0) < 1e-6) return 0;
+  const paso = v0 > 0 ? 0.0025 : -0.0025, lim = v0 > 0 ? 1 : -0.5;
+  let a = 0, b = paso;
+  while (Math.abs(b) <= Math.abs(lim) && vp(b) * v0 > 0) { a = b; b += paso; }
+  if (Math.abs(b) > Math.abs(lim)) return v0 > 0 ? Math.pow(1 + lim, 12) - 1 : -1;
+  for (let k = 0; k < 60; k++) { const mid = (a + b) / 2; if (vp(mid) * v0 > 0) a = mid; else b = mid; }
+  return Math.pow(1 + (a + b) / 2, 12) - 1;
+}
 // VPN del flujo del inversionista; cada mes se descuenta a fin de mes (mes 1 → t = 1).
 function calcVPNeq(m, r) { return calcVPN([0, ...m.flujoNeto], r); }
 
@@ -716,18 +733,14 @@ function credFuentes(m) {
     ? `La obra debe cubrirse con equity y con el recaudo de preventa durante obra (${fM(m.prevObra)} en separaciones y cuotas iniciales).`
     : 'No hay recaudo de preventa durante la obra: la construcción debe cubrirse con equity.';
 }
-function credParcial(inp, m) {
-  return `Solo caben ${m.tramosEmit} de ${inp.tramos} tramos entre la apertura (mes ${m.mesAp+1}) y el fin de obra (mes ${m.finObra}): quedan ${fM(m.cupoNoDes)} del cupo sin desembolsar.`;
-}
-
 // ── Renders de paneles ────────────────────────────────────────────
 function renderCredPanel(inp, prog, fin, m) {
   const pctCosto = fin.cTP > 0 ? m.picoEq / fin.cTP * 100 : 0;
   document.getElementById('cred-grid').innerHTML = [
     {cls:'cc-eq',  lbl:'Equity pico requerido',     val:fM(m.picoEq),    sub:'Mes '+m.mesPico+' · '+fP(pctCosto)+' del costo total'},
     {cls:'cc-cred',lbl:'Crédito desembolsado',       val:fM(m.montoDesemb), sub:'Cupo teórico '+fM(m.montoCred)+' · '+fP(inp.pfinc*100)+' del costo directo'},
-    {cls:'cc-int', lbl:'Intereses totales',           val:fM(m.totalInt),  sub:'Tasa '+fP(inp.tcred*100)+' anual sobre saldo vigente'},
-    {cls:'cc-sal', lbl:'Pago al cancelar crédito',   val:fM(m.pagoTotal), sub:m.montoDesemb > 0 ? 'Principal + intereses · en la entrega, mes '+(m.mesPago+1) : 'Sin crédito que cancelar'}
+    {cls:'cc-int', lbl:'Intereses totales',           val:fM(m.totalInt),  sub:'Tasa '+fP(inp.tcred*100)+' anual · se pagan cada mes'},
+    {cls:'cc-sal', lbl:'Principal a cancelar',       val:fM(m.montoDesemb), sub:m.montoDesemb > 0 ? 'En la entrega, mes '+(m.mesPago+1)+' · con saldo de compradores' : 'Sin crédito que cancelar'}
   ].map(c=>`<div class="cc ${c.cls}"><div class="cc-label">${c.lbl}</div><div class="cc-val">${c.val}</div><div class="cc-sub">${c.sub}</div></div>`).join('');
 
   const abre = credAbre(m) ? 'Mes '+(m.mesAp+1) : 'No abre';
@@ -739,14 +752,14 @@ function renderCredPanel(inp, prog, fin, m) {
   ].map(p=>`<div class="ph"><div class="ph-num">${p.n}</div><div class="ph-label">${p.l}</div></div>`).join('');
 
   document.getElementById('cred-nota').textContent = credAbre(m)
-    ? `PEQ alcanzado en mes ${m.mesUmbral+1}; apertura elegible en mes ${m.mesAp+1}. Desembolsado ${fM(m.montoDesemb)} en ${m.tramosEmit} de ${inp.tramos} tramos, dentro de la ventana de obra.` + (m.cupoNoDes > 1 ? ' ' + credParcial(inp, m) : '')
+    ? `PEQ alcanzado en mes ${m.mesUmbral+1}; apertura elegible en mes ${m.mesAp+1}. Desembolso contra avance de obra: ${fM(m.giroApertura)} en la apertura (obra ya ejecutada) y el resto mes a mes hasta el fin de obra (mes ${m.finObra}). Total ${fM(m.montoDesemb)}.`
     : `ATENCIÓN: ${credMotivo(inp, m)} ${credFuentes(m)}`;
 }
 
 function renderKPIs(inp, m) {
   document.getElementById('k-util').textContent = fM(m.uN);
   document.getElementById('k-marg').textContent = 'Margen neto: ' + fP(m.mN*100);
-  const tir = Math.pow(m.MOIC, 12/m.N) - 1;
+  const tir = m.tir;
   document.getElementById('k-tir').textContent  = fP(tir*100);
   document.getElementById('k-vpn').textContent  = fM(calcVPNeq(m, inp.tvpn));
   document.getElementById('k-vpns').textContent = '@ ' + fP(inp.tvpn*100);
@@ -775,14 +788,14 @@ function renderBanner(inp, m, fin) {
 }
 
 function renderAlerts(inp, m, fin) {
-  const tir = Math.pow(m.MOIC, 12/m.N) - 1;
+  const tir = m.tir;
   const al = [];
   if (m.horizonteExt) al.push({t:'amber', m:`La duración total indicada (${inp.dtotal} meses) no alcanza a incluir la entrega: preventa (${inp.dprev}) + obra (${inp.dobra}) terminan en el mes ${m.finObra} y la entrega es en el mes ${m.finObra+1}. El modelo se calcula a ${m.N} meses.`, f:'Aumenta la duración total o reduce preventa u obra.'});
   if (!credAbre(m)) al.push({t:'red',   m:credMotivo(inp, m), f:credFuentes(m)});
-  else if (m.cupoNoDes > 1) al.push({t:'amber', m:credParcial(inp, m), f:'Supuesto del modelo: el remanente no se concentra en el último mes.'});
   if (tir < 0)           al.push({t:'red',   m:`TIR negativa (${fP(tir*100)}). El proyecto destruye valor incluyendo el costo de la deuda.`, f:'Ajusta precios o reduce costos directos.'});
   else if (tir < inp.hurdle) al.push({t:'amber', m:`TIR (${fP(tir*100)}) por debajo del hurdle LP (${fP(inp.hurdle*100)}).`, f:'El LP no alcanza su retorno preferido.'});
   if (m.totalInt > fin.cC * 0.15) al.push({t:'amber', m:`Intereses del crédito constructor (${fM(m.totalInt)}) superan el 15% del costo directo.`, f:'Negocia mejor tasa o reduce el plazo de obra.'});
+  if (m.vAcum < 0.999)  al.push({t:'amber', m:`Al final del horizonte queda sin vender el ${fP((1-m.vAcum)*100)} de las unidades. El modelo no les asigna ningún valor: no generan ingreso.`, f:'Sube el ritmo de ventas o amplía la duración del proyecto.'});
   if (m.vAcum < 0.80)   al.push({t:'amber', m:`Absorción proyectada ${fP(m.vAcum*100)} de unidades. Riesgo de no alcanzar PEQ.`, f:'Ajusta la curva de absorción o la velocidad de ventas.'});
   if (inp.salPct > 0.70) al.push({t:'amber', m:`Saldo a la entrega es ${fP(inp.salPct*100)}% del precio. Alta dependencia del crédito hipotecario del comprador.`, f:''});
   if (!m.payback)        al.push({t:'red',   m:'El flujo acumulado no cruza a positivo en el horizonte del proyecto.', f:''});
@@ -811,12 +824,12 @@ function renderER(inp, prog, fin, m) {
     erRow('Gastos administrativos', -m.gAV, 0, 1) +
     erRow('Intereses crédito constructor', -m.totalInt, 0, 1) +
     erRow('Utilidad antes de impuestos', m.uAI, 1) +
-    erRow('Impuesto a la renta', -m.impM, 0, 1) +
+    erRow('Impuesto a la renta (simplificado: se paga en el último mes)', -m.impM, 0, 1) +
     erRow('Utilidad neta', m.uN, 1, 0, 1);
 
   document.getElementById('ir-content').innerHTML = [
     ['Costo total proyecto', fM(fin.cTP)],
-    ['Equity pico requerido (real)', fM(m.eqInv)],
+    ['Equity pico requerido (déficit máximo del flujo)', fM(m.eqInv)],
     ['Crédito constructor — cupo teórico', fM(m.montoCred)],
     ['Crédito constructor — desembolsado', fM(m.montoDesemb)],
     ['Intereses totales crédito', fM(m.totalInt)],
@@ -862,7 +875,7 @@ function renderSens(inp, prog) {
     pd.forEach(p => {
       const f2 = calcFin(inp, prog, 1+p);
       const m2 = calcModel(Object.assign({}, inp, { rpico: inp.rpico * (1 + r) }), prog, f2);
-      const tir = Math.pow(m2.MOIC, 12/m2.N) - 1;
+      const tir = m2.tir;
       const c = tir > inp.hurdle ? 'sg2' : tir > 0 ? 'sm2' : 'sb2';
       h += `<td><span class="sc-cell ${c}">${fP(tir*100)}</span></td>`;
     });
@@ -878,7 +891,7 @@ function renderScen(inp, prog, m) {
     const f2  = calcFin(inp, prog, s.pM);
     const m2  = calcModel(inp, prog, f2);
     const wf2 = calcWF(inp, m2);
-    const tir = Math.pow(m2.MOIC, 12/m2.N) - 1;
+    const tir = m2.tir;
     const vpn = calcVPNeq(m2, inp.tvpn);
     const viable = tir > inp.hurdle ? 'v' : tir > 0 ? 'm' : 'n';
     const vl     = tir > inp.hurdle ? 'VIABLE' : tir > 0 ? 'MARGINAL' : 'NO VIABLE';
@@ -953,7 +966,7 @@ update();
   function rTri(a,m,b,rng){ const u=rng(), fc=(m-a)/(b-a); return u<fc ? a+Math.sqrt(u*(b-a)*(m-a)) : b-Math.sqrt((1-u)*(b-a)*(b-m)); }
   function muestra(d,rng){ if(d.tipo==='pert'){ const al=1+4*(d.moda-d.min)/(d.max-d.min), be=1+4*(d.max-d.moda)/(d.max-d.min); return d.min+(d.max-d.min)*rBeta(al,be,rng); } return rTri(d.min,d.moda,d.max,rng); }
   function salidasDe(inp){ const prog=calcProg(inp), fin=calcFin(inp,prog), m=calcModel(inp,prog,fin), wf=calcWF(inp,m);
-    return { tir:Math.pow(m.MOIC,12/m.N)-1, vpn:calcVPNeq(m,inp.tvpn), tirLP:wf.tirLP, tirGP:wf.tirGP }; }
+    return { tir:m.tir, vpn:calcVPNeq(m,inp.tvpn), tirLP:wf.tirLP, tirGP:wf.tirGP }; }
   const DRIVERS=[
     {key:'pv',label:'Precio de venta',unidad:'COP/m²',f:1,dec:0,lo:0.85,hi:1.15},
     {key:'csr',label:'Costo construcción (sobre rasante)',unidad:'COP/m²',f:1,dec:0,lo:0.90,hi:1.15},
@@ -1033,7 +1046,7 @@ update();
       const sAbs=torn.reduce(function(s,x){return s+Math.abs(x.r||0);},0)||1;
       function kpi(l,v,s){ return '<div class="kpi"><div class="kl">'+l+'</div><div class="kv blue">'+v+'</div><div class="ks">'+(s||'')+'</div></div>'; }
       let html='<div class="kpi-row">'+
-        kpi('TIR media', fP(media(tS)*100), 'sobre equity · anual')+
+        kpi('TIR media', fP(media(tS)*100), 'tasa interna del flujo · anual')+
         kpi('TIR P10 (pesimista)', fP(pctil(tS,10)*100),'1 de cada 10 peor')+
         kpi('TIR P50 (mediana)', fP(pctil(tS,50)*100),'escenario central')+
         kpi('TIR P90 (optimista)', fP(pctil(tS,90)*100),'1 de cada 10 mejor')+

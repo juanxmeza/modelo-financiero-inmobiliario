@@ -7,20 +7,20 @@ const { cargarModelo, inpBase, inpRepro, correr } = require('./cargar-modelo.js'
 const M = cargarModelo();
 const suma = a => a.reduce((x, y) => x + y, 0);
 
-test('el flujo neto suma exactamente la utilidad neta (ni deuda fantasma ni intereses dobles)', () => {
+test('el flujo neto suma exactamente la utilidad neta (ni deuda fantasma ni intereses dobles) y todo lo vendido se cobra', () => {
   let n = 0;
   for (const curva of ['s', 'rapida', 'lenta', 'lineal']) {
     M.setCurva(curva);
     for (const [dtotal, dprev, dobra] of [[12, 3, 6], [30, 4, 18], [24, 0, 20], [60, 12, 36], [12, 0, 18], [12, 6, 6], [24, 12, 48]])
     for (const retraso of [0, 3, 8])
     for (const peq of [0.40, 0.65, 0.90])
-    for (const tramos of [3, 10, 20])
+    for (const pfinc of [0.40, 0.70, 0.90])
     for (const rpico of [0.03, 0.08, 0.20]) {
-      const { m, fin } = correr(M, inpBase({ dtotal, dprev, dobra, retraso, peq, tramos, rpico }));
-      const ctx = JSON.stringify({ curva, dtotal, dprev, dobra, retraso, peq, tramos, rpico });
+      const { m, fin } = correr(M, inpBase({ dtotal, dprev, dobra, retraso, peq, pfinc, rpico }));
+      const ctx = JSON.stringify({ curva, dtotal, dprev, dobra, retraso, peq, pfinc, rpico });
       assert.ok(Math.abs(suma(m.flujoNeto) - m.uN) < 1, ctx);
       assert.ok(Math.abs(m.ingTot - fin.ingT * m.vAcum) < 1, 'todo lo vendido se cobra: ' + ctx);
-      assert.ok(Math.abs(suma(m.pagoCred) - (m.montoDesemb + m.totalInt)) < 1, 'se paga principal + intereses, una sola vez: ' + ctx);
+      assert.ok(Math.abs(suma(m.pagoCred) - (m.montoDesemb + m.totalInt)) < 1, 'servicio del crédito = principal + intereses: ' + ctx);
       n++;
     }
   }
@@ -28,16 +28,16 @@ test('el flujo neto suma exactamente la utilidad neta (ni deuda fantasma ni inte
   assert.ok(n > 2000);
 });
 
-test('los desembolsos entran al flujo y los intereses no se restan mes a mes', () => {
+test('los desembolsos entran al flujo y los intereses salen cada mes', () => {
   const { m } = correr(M, inpRepro({ retraso: 0, rpico: 0.20, peq: 0.40 }));
   for (const mes of [7, 8, 9]) {
     const i = mes - 1;
     assert.ok(m.desemb[i] > 0 && m.intMes[i] > 0);
-    assert.ok(Math.abs(m.flujoNeto[i] - (m.ingTotalMes[i] + m.desemb[i] - m.egOper[i])) < 1, 'mes ' + mes);
+    assert.ok(Math.abs(m.flujoNeto[i] - (m.ingTotalMes[i] + m.desemb[i] - m.egOper[i] - m.intMes[i])) < 1, 'mes ' + mes);
   }
-  // el crédito se cancela en el mes de la entrega (mes 10) con principal + intereses
+  // el principal se cancela en el mes de la entrega (mes 10)
   assert.equal(m.mesPago + 1, 10);
-  assert.ok(Math.abs(m.pagoCred[9] - (m.montoDesemb + m.totalInt)) < 1);
+  assert.ok(Math.abs(m.pagoCred[9] - (m.montoDesemb + m.intMes[9])) < 1);
   assert.ok(m.saldoCred.slice(9).every(v => v === 0));
 });
 
@@ -45,15 +45,17 @@ test('VPN: a tasa 0 % es la utilidad neta; no se antepone el pico de equity', ()
   const inp = inpBase();
   const { m } = correr(M, inp);
   assert.ok(Math.abs(M.calcVPNeq(m, 0) - m.uN) < 1);
-  // proyecto con utilidad positiva y flujo convencional: el VPN no puede ser peor que −(déficit máximo)
-  assert.ok(M.calcVPNeq(m, inp.tvpn) > -Math.max(...m.flujoAcum.map(v => -v)));
   assert.ok(!/calcVPN\(\[-m2?\.eqInv/.test(M.html), 'ningún VPN debe anteponer −eqInv al flujo');
 });
 
-test('estado de resultados: gastos comerciales y administrativos solo sobre lo vendido', () => {
-  const { m, fin } = correr(M, inpBase());   // ritmo 8 %: no se vende todo
+test('gastos: comisiones sobre lo vendido; administración fija y repartida por igual cada mes', () => {
+  const inp = inpBase({ rpico: 0.08 });        // no se vende todo
+  const { m, fin } = correr(M, inp);
   assert.ok(m.vAcum > 0.5 && m.vAcum < 0.9);
-  assert.ok(Math.abs(m.gCV - fin.gC * m.vAcum) < 1 && Math.abs(m.gAV - fin.gA * m.vAcum) < 1);
+  assert.ok(Math.abs(m.gCV - fin.gC * m.vAcum) < 1, 'comerciales proporcionales a lo vendido');
+  assert.ok(Math.abs(m.gAV - fin.gA) < 1, 'administrativos completos aunque no se venda todo');
+  // un mes sin obra ni ventas ni deuda (mes 2): el único egreso es la cuota de administración
+  assert.ok(Math.abs(m.egOper[1] - fin.gA / m.N) < 1);
 });
 
 test('recaudo: lo vendido se cobra completo (separación + cuota inicial + saldo), sin perder la cuota inicial', () => {
@@ -93,7 +95,7 @@ test('sensibilidad: las filas de ritmo recalculan el modelo con otro ritmo pico'
 
 test('si la duración total no incluye la entrega, el modelo se extiende hasta ese mes y lo señala', () => {
   // Hallazgo de auditoría: horizonte 12, preventa 0, obra 18 → la entrega es en el mes 19.
-  const inp = inpRepro({ dprev: 0, dobra: 18, retraso: 0, peq: 0.40, rpico: 0.20, tramos: 20 });
+  const inp = inpRepro({ dprev: 0, dobra: 18, retraso: 0, peq: 0.40, rpico: 0.20 });
   const { m, fin } = correr(M, inp);
   assert.equal(m.N, 19);
   assert.equal(m.horizonteExt, true);
@@ -101,19 +103,41 @@ test('si la duración total no incluye la entrega, el modelo se extiende hasta e
   assert.equal(m.flujoNeto.length, 19);
   assert.ok(Math.abs(suma(m.flujoNeto) - m.uN) < 1, 'caja = utilidad');
   assert.ok(Math.abs(m.ingTot - fin.ingT * m.vAcum) < 1, 'recaudo completo');
-  assert.ok(m.ingSal[18] > 0 && m.pagoCred[18] > 0, 'saldo de compradores y pago del crédito en el mes de la entrega');
-  // cronograma que sí cabe: no se toca
+  assert.ok(m.ingSal[18] > 0 && m.pagoCred[18] > m.montoDesemb, 'saldo de compradores y principal en el mes de la entrega');
   const b = correr(M, inpBase()).m;
   assert.equal(b.N, 30); assert.equal(b.horizonteExt, false);
   assert.match(M.html, /if \(m\.horizonteExt\) al\.push/);
 });
 
-test('el panel informa el pago real del crédito, no el saldo del último mes de obra', () => {
-  M.setCurva('lineal');
-  const { m } = correr(M, inpRepro({ dprev: 0, dobra: 6, retraso: 0, peq: 0.40, rpico: 0.20, tramos: 3 }));
-  M.setCurva('rapida');
-  assert.ok(Math.abs(m.pagoTotal - (m.montoDesemb + m.totalInt)) < 1);
-  assert.ok(Math.abs(m.pagoTotal - m.pagoCred[m.mesPago]) < 1);
-  assert.ok(m.pagoTotal - m.saldoFinal > 1e6, 'el saldo de cierre de obra omite el interés del mes de pago');
-  assert.match(M.html, /lbl:'Pago al cancelar crédito',\s*val:fM\(m\.pagoTotal\)/);
+test('pico de equity: es el déficit máximo del flujo acumulado del inversionista', () => {
+  for (const inp of [inpBase(), inpBase({ rpico: 0.06 }), inpRepro({ retraso: 0, rpico: 0.20, peq: 0.40 })]) {
+    const { m } = correr(M, inp);
+    let ac = 0, peor = 0, mesPeor = 0;
+    m.flujoNeto.forEach((f, i) => { ac += f; if (-ac > peor + 1e-6) { peor = -ac; mesPeor = i + 1; } });
+    assert.ok(Math.abs(m.picoEq - peor) < 1);
+    assert.equal(m.mesPico, mesPeor);
+    assert.ok(m.equityReq.every((v, i) => Math.abs(v - Math.max(0, -m.flujoAcum[i])) < 1e-6));
+  }
+});
+
+test('TIR: es la tasa interna del flujo mensual, anualizada', () => {
+  // flujos conocidos: −100 hoy… se invierte 100 y se reciben 121 dos meses después → 10 % mensual
+  assert.ok(Math.abs(M.calcTIR([-100, 0, 121]) - (Math.pow(1.1, 12) - 1)) < 1e-9);
+  assert.ok(Math.abs(M.calcTIR([-100, 100])) < 1e-9, 'recuperar lo invertido es 0 %');
+  assert.equal(M.calcTIR([-100, 0, 0]), -1, 'no recuperar nada es −100 %');
+  assert.ok(M.calcTIR([-100, 0, 81]) < 0);
+  // en el modelo: el VPN descontado a la TIR es cero, y el signo coincide con el de la utilidad
+  for (const inp of [inpBase(), inpBase({ rpico: 0.10 }), inpBase({ rpico: 0.06 }), inpRepro({ retraso: 0, rpico: 0.20, peq: 0.40 })]) {
+    const { m } = correr(M, inp);
+    if (m.tir > -1) {
+      const rMes = Math.pow(1 + m.tir, 1 / 12) - 1;
+      const vp = m.flujoNeto.reduce((a, v, t) => a + v / Math.pow(1 + rMes, t + 1), 0);
+      assert.ok(Math.abs(vp) < 1e-3 * m.picoEq, 'VPN a la TIR = 0');
+    }
+    assert.equal(Math.sign(m.tir), Math.sign(m.uN));
+    // coherencia con el VPN: si la TIR supera la tasa de descuento, el VPN es positivo
+    const tasaEfectiva = Math.pow(1 + inp.tvpn / 12, 12) - 1;
+    assert.equal(m.tir > tasaEfectiva, M.calcVPNeq(m, inp.tvpn) > 0);
+  }
+  assert.ok(!/Math\.pow\(m2?\.MOIC/.test(M.html), 'la TIR ya no se deriva del MOIC');
 });

@@ -1,4 +1,4 @@
-# Crédito constructor — reglas de desembolso
+# Crédito constructor — reglas
 
 Reglas que aplica `calcModel()` en `index.html`. Los meses son los que ve el usuario (1…N).
 
@@ -8,30 +8,31 @@ Reglas que aplica `calcModel()` en `index.html`. Los meses son los que ve el usu
 |---|---|
 | `mesUmbral` | Mes real en que las ventas acumuladas alcanzan el punto de equilibrio (PEQ). `-1` si nunca se alcanza dentro del horizonte. |
 | `mesAp` | Apertura elegible: `max(mesUmbral, inicio de obra)`. Solo existe si el umbral se cumple a más tardar en el último mes de obra; si no, `-1`. |
-| `montoCred` / `montoDesemb` | Cupo teórico (`% financiado × costo directo`) y monto efectivamente desembolsado. `cupoNoDes` es la diferencia. |
+| `montoCred` / `montoDesemb` | Cupo teórico (`% financiado × costo directo`) y monto efectivamente desembolsado. |
 
 `credEstado` resume el resultado: `abierto`, `tardio` (umbral alcanzado después del cierre de obra) o `no_alcanzado`.
 
-## Reglas
+## Desembolso: contra avance de obra
 
-1. Ningún desembolso ocurre antes del mes en que se cumple el umbral.
-2. Ningún desembolso ocurre fuera de la ventana de construcción (del inicio de obra al último mes de obra).
-3. Si el estado es `tardio` o `no_alcanzado`, el crédito no existe en el flujo: principal, saldo, intereses y repago son cero. El cupo teórico se sigue mostrando, aparte del desembolsado.
-4. Los tramos son iguales (`cupo / n.º de tramos`), con un intervalo de `floor(meses disponibles / tramos)` meses y mínimo uno.
+1. Ningún giro ocurre antes del mes en que se cumple el umbral, ni fuera de la ventana de construcción.
+2. En el mes de apertura el banco gira el % financiado del costo directo **ya ejecutado** (incluido ese mes): se pone al día.
+3. Cada mes siguiente gira el % financiado del costo directo de ese mes, hasta el último mes de obra.
+4. Si el crédito abre, al final de la obra se ha desembolsado el cupo completo. El acumulado girado nunca supera el % financiado de la obra ejecutada.
+5. Si el estado es `tardio` o `no_alcanzado`, el crédito no existe en el flujo: principal, saldo, intereses y pagos son cero. El cupo teórico se sigue mostrando aparte.
 
-## Supuesto pendiente de confirmar por Juan
+No hay control de «tramos»: el calendario de giros lo determina el avance de la obra.
 
-**Qué pasa con los tramos que no caben entre la apertura y el fin de obra.**
+## Intereses y cancelación
 
-Regla implementada (la más conservadora): **no se desembolsan**. El cupo restante queda sin usar, se informa en el panel y se emite una alerta. Antes, el remanente se sumaba completo al último mes de obra.
+- Los intereses se pagan **cada mes** sobre el principal vigente, a `tasa anual / 12`. No se capitalizan.
+- El principal se cancela completo en el mes de la entrega (el siguiente al último mes de obra), con el saldo de los compradores. Ese mes también paga su interés.
 
-Esto no afecta solo al caso límite: siempre que haya menos meses entre la apertura y el fin de obra que tramos configurados, parte del cupo queda sin desembolsar. Con obra de 18 meses y apertura en el mes 12 de un cronograma que termina obra en el mes 22 hay 11 meses disponibles; con 20 tramos se desembolsa el 55 % del cupo.
+## Supuestos decididos por Juan (pendientes de contrastar con un contrato real)
 
-Alternativas a decidir:
+- Desembolso contra avance de obra con puesta al día en la apertura.
+- Pago mensual de intereses.
 
-- **A — No desembolsar el remanente** (implementada). Subestima el crédito si el banco permite ponerse al día.
-- **B — Repartir el cupo completo entre los meses disponibles** (menos tramos, más grandes). Supone que el banco desembolsa de una vez la obra ya ejecutada.
-- **C — Desembolsar contra avance de obra:** en la apertura, el % financiado del costo ya ejecutado; después, el % financiado del costo de cada mes. Es lo más cercano a un desembolso contra actas de avance, pero vuelve irrelevante el control «tramos».
+Ambos se eligieron por criterio, no a partir de un contrato concreto. Un banco puede girar por hitos, retener un porcentaje o cobrar intereses trimestrales.
 
 ## Pruebas
 

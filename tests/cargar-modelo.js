@@ -12,7 +12,7 @@ function cargarModelo(archivo = path.join(__dirname, '..', 'index.html')) {
   const fabrica = new Function(
     `let curvaActiva = 'rapida';
      ${codigo}
-     return { calcProg, calcFin, calcModel, calcVPN, calcVPNeq: (typeof calcVPNeq === 'function' ? calcVPNeq : null), calcWF, setCurva: c => { curvaActiva = c; } };`
+     return { calcProg, calcFin, calcModel, calcVPN, calcVPNeq, calcTIR, calcWF, setCurva: c => { curvaActiva = c; } };`
   );
   return { ...fabrica(), html };
 }
@@ -24,10 +24,10 @@ function inpBase(over = {}) {
     terreno: 1000, pterre: 7560000, alib: 0.30, pisos: 8, sotan: 3, cobsot: 1,
     acomun: 0.12, aestac: 28, pv: 10080000, pe: 50400000,
     sepPct: sep, ciPct: ci, salPct: 1 - sep - ci, mesci: 1,
-    peq: 0.65, pfinc: 0.70, tcred: 0.14, tramos: 10,
+    peq: 0.65, pfinc: 0.70, tcred: 0.14,
     csr: 2730000, csot: 3150000, ciind: 0.155, gc: 0.055, ga: 0.02,
     equity: 0.40, imp: 0.33, tvpn: 0.12,
-    dtotal: 30, dprev: 4, dobra: 18, rpico: 0.08, mpico: 4, retraso: 0,
+    dtotal: 30, dprev: 4, dobra: 18, rpico: 0.12, mpico: 4, retraso: 0,
     gppct: 0.20, hurdle: 0.15, gpsplit: 0.30
   }, over);
 }
@@ -36,7 +36,7 @@ function inpBase(over = {}) {
 function inpRepro(over = {}) {
   return inpBase(Object.assign({
     dtotal: 12, dprev: 3, dobra: 6, rpico: 0.15, mpico: 4,
-    peq: 0.90, pfinc: 0.60, tramos: 3, retraso: 6
+    peq: 0.90, pfinc: 0.60, retraso: 6
   }, over));
 }
 

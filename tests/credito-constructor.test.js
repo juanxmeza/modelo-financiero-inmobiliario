@@ -12,38 +12,36 @@ const mesesCon = a => a.map((v, i) => (v > 0 ? i + 1 : 0)).filter(Boolean);
 function assertSinCredito({ m, prog, fin }, inp) {
   assert.equal(m.mesAp, -1, 'no debe existir apertura elegible');
   assert.equal(m.montoDesemb, 0, 'principal desembolsado');
-  assert.equal(m.tramosEmit, 0);
+  assert.equal(m.giroApertura, 0);
   assert.ok(m.desemb.every(v => v === 0), 'desembolsos mensuales');
   assert.ok(m.desAcum.every(v => v === 0), 'desembolso acumulado (gráfico de fuentes)');
   assert.ok(m.saldoCred.every(v => v === 0), 'saldo (gráfico de saldo)');
   assert.ok(m.intMes.every(v => v === 0), 'intereses mensuales');
   assert.equal(m.totalInt, 0, 'intereses totales');
-  assert.equal(m.saldoFinal, 0, 'repago');
+  assert.ok(m.pagoCred.every(v => v === 0), 'servicio del crédito');
   assert.ok(m.montoCred > 0, 'el cupo teórico se sigue informando aparte');
-  assert.equal(m.cupoNoDes, m.montoCred);
-  // Sin crédito, los egresos del flujo no pueden contener ningún movimiento de deuda:
-  // solo terreno, costos de obra ejecutados dentro del horizonte y gastos sobre lo vendido.
-  const k = 1;   // el horizonte siempre contiene toda la obra
-  const egSinDeuda = prog.cT + (fin.cC + fin.cI) * k + (fin.gC + fin.gA) * m.vAcum;
+  // Sin crédito, los egresos no pueden contener ningún movimiento de deuda:
+  // solo terreno, obra, administración fija y comisiones sobre lo vendido.
+  const egSinDeuda = prog.cT + fin.cC + fin.cI + fin.gA + fin.gC * m.vAcum;
   assert.ok(Math.abs(suma(m.egMes) - m.impM - egSinDeuda) < 1, 'egresos sin intereses ni repago');
-  assert.ok(m.pagoCred.every(v => v === 0), 'pago del crédito');
 }
 
 // Escenario base de las pruebas: Lanzamiento, 12 meses, 3 de preventa, 6 de obra (meses 4 a 9),
-// ritmo pico 20 % en el mes 4, umbral 40 %, 3 tramos. Ventas mensuales desde el inicio:
-// 5 %, 10 %, 15 %, 20 %, 20 %, 16,4 %… (acumulado 5, 15, 30, 50, 70, 86,4…).
+// ritmo pico 20 % en el mes 4, umbral 40 %, 60 % del costo directo financiado.
+// Ventas mensuales desde el inicio: 5 %, 10 %, 15 %, 20 %, 20 %, 16,4 %… (acumulado 5, 15, 30, 50, 70…).
 const esc = over => inpRepro(Object.assign({ rpico: 0.20, peq: 0.40 }, over));
 
-test('control (sin retraso): umbral en el mes 7 → tres tramos iguales en los meses 7, 8 y 9', () => {
-  const { m } = correr(M, esc({ retraso: 0 }));
+test('control (sin retraso): umbral en el mes 7 → giro de apertura por la obra ejecutada y luego mes a mes', () => {
+  const { m, fin } = correr(M, esc({ retraso: 0 }));
+  const mensual = 0.60 * fin.cC / 6;                      // 60 % del costo directo de un mes de obra
   assert.equal(m.credEstado, 'abierto');
   assert.equal(m.mesUmbral + 1, 7);
   assert.equal(m.mesAp + 1, 7);
   assert.deepEqual(mesesCon(m.desemb), [7, 8, 9]);
-  for (const mes of [7, 8, 9]) assert.ok(Math.abs(m.desemb[mes - 1] - m.montoCred / 3) < 1);
-  assert.ok(Math.abs(m.montoDesemb - m.montoCred) < 1);
-  assert.ok(m.cupoNoDes < 1);
-  assert.ok(m.totalInt > 0 && m.saldoFinal > 0);
+  assert.ok(Math.abs(m.desemb[6] - 4 * mensual) < 1, 'apertura: obra de los meses 4, 5, 6 y 7');
+  assert.ok(Math.abs(m.giroApertura - 4 * mensual) < 1);
+  assert.ok(Math.abs(m.desemb[7] - mensual) < 1 && Math.abs(m.desemb[8] - mensual) < 1);
+  assert.ok(Math.abs(m.montoDesemb - m.montoCred) < 1, 'si abre, se desembolsa el cupo completo');
 });
 
 test('retraso 3 meses: el umbral llega en el mes 10, después de la obra (mes 9) → sin desembolsos', () => {
@@ -62,14 +60,12 @@ test('retraso 8 meses: solo se vende el 5 % → umbral no alcanzado, sin desembo
   assertSinCredito(r, inp);
 });
 
-test('retraso 2 meses: umbral en el último mes de obra → un solo tramo, sin concentrar el remanente', () => {
+test('retraso 2 meses: umbral en el último mes de obra → un solo giro por toda la obra ejecutada', () => {
   const { m } = correr(M, esc({ retraso: 2 }));
   assert.equal(m.mesUmbral + 1, 9, 'umbral en el último mes de obra');
   assert.equal(m.credEstado, 'abierto');
   assert.deepEqual(mesesCon(m.desemb), [9]);
-  assert.equal(m.tramosEmit, 1);
-  assert.ok(Math.abs(m.desemb[8] - m.montoCred / 3) < 1, 'solo un tramo, no el cupo completo');
-  assert.ok(Math.abs(m.cupoNoDes - m.montoCred * 2 / 3) < 1, 'dos tercios del cupo quedan sin desembolsar');
+  assert.ok(Math.abs(m.desemb[8] - m.montoCred) < 1, 'toda la obra está ejecutada: se gira el cupo');
 });
 
 test('casos del informe original (ritmo 15 %, retraso 6 u 8, umbral 90 % o 40 %): ninguno abre el crédito', () => {
@@ -88,12 +84,12 @@ test('invariantes en una malla de supuestos (los mismos que recorre Monte Carlo)
     for (const [dtotal, dprev, dobra] of [[12, 3, 6], [30, 4, 18], [24, 0, 24], [18, 6, 20], [60, 12, 48]])
     for (const retraso of [0, 1, 3, 6, 8, 12])
     for (const peq of [0.40, 0.65, 0.90])
-    for (const tramos of [3, 10, 20])
+    for (const pfinc of [0.40, 0.70, 0.90])
     for (const rpico of [0.02, 0.08, 0.15]) {
-      const inp = inpBase({ dtotal, dprev, dobra, retraso, peq, tramos, rpico });
+      const inp = inpBase({ dtotal, dprev, dobra, retraso, peq, pfinc, rpico });
       const r = correr(M, inp), m = r.m;
       const N = m.N, ultObra = dprev + dobra - 1;
-      const ctx = JSON.stringify({ curva, dtotal, dprev, dobra, retraso, peq, tramos, rpico });
+      const ctx = JSON.stringify({ curva, dtotal, dprev, dobra, retraso, peq, pfinc, rpico });
       n++;
       // mes real del umbral, recalculado de forma independiente
       let ac = 0, umbral = -1;
@@ -104,15 +100,19 @@ test('invariantes en una malla de supuestos (los mismos que recorre Monte Carlo)
       if (esperado !== 'abierto') { assertSinCredito(r, inp); esperado === 'tardio' ? tardios++ : nunca++; continue; }
       abiertos++;
       assert.equal(m.mesAp, Math.max(umbral, dprev), ctx);
-      m.desemb.forEach((d, i) => {
-        if (d === 0) return;
-        assert.ok(i >= umbral, 'desembolso antes del umbral: ' + ctx);
-        assert.ok(i >= dprev && i <= ultObra, 'desembolso fuera de la ventana de obra: ' + ctx);
-        assert.ok(d <= m.montoCred / tramos + 1, 'tramo mayor al nominal (remanente concentrado): ' + ctx);
-      });
-      assert.ok(m.montoDesemb <= m.montoCred + 1, ctx);
-      assert.ok(Math.abs(m.montoDesemb + m.cupoNoDes - m.montoCred) < 1, ctx);
-      assert.ok(Math.abs(m.montoDesemb - m.tramosEmit * m.montoCred / tramos) < 1, ctx);
+      // el acumulado desembolsado nunca supera el % financiado de la obra ejecutada
+      let ejecutado = 0, girado = 0;
+      for (let i = 0; i < N; i++) {
+        if (i >= dprev && i <= ultObra) ejecutado += r.fin.cC / dobra;
+        girado += m.desemb[i];
+        if (m.desemb[i] > 0) {
+          assert.ok(i >= umbral, 'desembolso antes del umbral: ' + ctx);
+          assert.ok(i >= dprev && i <= ultObra, 'desembolso fuera de la ventana de obra: ' + ctx);
+        }
+        assert.ok(girado <= pfinc * ejecutado + 1, 'giro por encima del avance de obra: ' + ctx);
+        if (i >= m.mesAp && i <= ultObra) assert.ok(Math.abs(girado - pfinc * ejecutado) < 1, 'giro al día con el avance: ' + ctx);
+      }
+      assert.ok(Math.abs(m.montoDesemb - m.montoCred) < 1, ctx);
       assert.ok(Math.abs(m.desAcum[N - 1] - m.montoDesemb) < 1, ctx);
     }
   }
@@ -130,17 +130,22 @@ test('ventas acumuladas iguales al umbral salvo error de coma flotante cuentan c
   assert.equal(m.mesAp + 1, 14);
 });
 
-test('los intereses siguen la misma tasa y fórmula sobre el saldo vigente', () => {
+test('intereses: se pagan cada mes sobre el principal vigente, sin capitalizar; el principal se cancela en la entrega', () => {
   const inp = inpBase();
   const { m } = correr(M, inp);
-  let saldo = 0;
+  assert.ok(m.montoDesemb > 0);
+  let principal = 0;
   for (let i = 0; i < m.N; i++) {
-    saldo += m.desemb[i];
-    const int = saldo * inp.tcred / 12;
-    assert.ok(Math.abs(m.intMes[i] - int) < 1e-6, 'mes ' + (i + 1));
-    saldo += int;
-    if (i === m.finObra) saldo = 0;
+    principal += m.desemb[i];
+    const int = principal * inp.tcred / 12;
+    assert.ok(Math.abs(m.intMes[i] - int) < 1e-6, 'interés del mes ' + (i + 1));
+    if (i === m.mesPago) {
+      assert.ok(Math.abs(m.pagoCred[i] - (int + principal)) < 1e-6, 'entrega: interés del mes + todo el principal');
+      principal = 0;
+    } else assert.ok(Math.abs(m.pagoCred[i] - int) < 1e-6, 'mes ' + (i + 1) + ': solo intereses');
+    assert.ok(Math.abs(m.saldoCred[i] - principal) < 1e-6, 'el saldo es solo principal');
   }
+  assert.equal(m.mesPago, m.finObra);
 });
 
 test('avisos, indicadores y Monte Carlo dependen del estado calculado, no de una segunda regla', () => {
@@ -148,6 +153,7 @@ test('avisos, indicadores y Monte Carlo dependen del estado calculado, no de una
   assert.ok(!/vAcum\s*(>=|<)\s*inp\.peq/.test(js), 'ningún render debe decidir la apertura comparando vAcum con el PEQ');
   assert.ok(!js.includes('100% con equity'), 'no afirmar financiación 100 % con equity');
   assert.ok(!/mesAp\s*=\s*finObra/.test(js), 'no sustituir «no alcanzado» por fin de obra');
+  assert.ok(!/tramos/i.test(M.html), 'el control de tramos ya no existe');
   // Monte Carlo y escenarios/sensibilidad llaman al mismo calcModel (una sola definición).
   assert.equal(js.match(/function calcModel\(/g).length, 1);
   assert.match(js, /function salidasDe\(inp\)\{[^}]*calcModel\(inp,prog,fin\)/);
