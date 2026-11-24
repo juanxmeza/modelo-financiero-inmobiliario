@@ -141,3 +141,18 @@ test('TIR: es la tasa interna del flujo mensual, anualizada', () => {
   }
   assert.ok(!/Math\.pow\(m2?\.MOIC/.test(M.html), 'la TIR ya no se deriva del MOIC');
 });
+
+test('waterfall: reparte capital + utilidad; primero devuelve el capital y nada se pierde', () => {
+  const inp = inpBase();
+  const { m } = correr(M, inp);
+  const wf = M.calcWF(inp, m);
+  assert.ok(m.uN > 0);
+  assert.ok(Math.abs(wf.disp - (m.picoEq + m.uN)) < 1);
+  assert.ok(Math.abs(wf.tLP + wf.tGP - wf.disp) < 1, 'todo lo disponible se reparte');
+  assert.ok(Math.abs(wf.dLP - wf.lpC) < 1 && Math.abs(wf.dGP - wf.gpC) < 1, 'con utilidad positiva ambos recuperan su capital');
+  assert.ok(wf.tirLP > 0, 'un proyecto con utilidad no puede dar rentabilidad negativa al LP');
+  assert.ok(wf.tirGP >= 0);
+  // con pérdida: los socios recuperan menos que lo aportado, nunca un valor negativo
+  const p = correr(M, inpBase({ rpico: 0.06 })).m, wp = M.calcWF(inpBase({ rpico: 0.06 }), p);
+  assert.ok(p.uN < 0 && wp.disp >= 0 && wp.disp < p.picoEq && wp.tirLP < 0);
+});

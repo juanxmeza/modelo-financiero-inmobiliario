@@ -655,12 +655,15 @@ function calcVPNeq(m, r) { return calcVPN([0, ...m.flujoNeto], r); }
 function calcWF(inp, m) {
   const lp = 1 - inp.gppct; const lpC = m.eqInv * lp; const gpC = m.eqInv * inp.gppct;
   const yrs = m.N / 12; const hAmt = lpC * (Math.pow(1+inp.hurdle, yrs) - 1);
-  const disp = Math.max(0, m.uN); let r = disp;
+  // Se reparte la caja total que vuelve a los socios: capital aportado + utilidad neta.
+  // (Antes solo se repartía la utilidad, y de ella se «devolvía» el capital.)
+  const disp = Math.max(0, m.eqInv + m.uN); let r = disp;
   const dLP = Math.min(r, lpC); r -= dLP;
   const dGP = Math.min(r, gpC); r -= dGP;
   const pLP = Math.min(r, hAmt); r -= pLP;
   const uLP = r * (1 - inp.gpsplit); const uGP = r * inp.gpsplit;
   const tLP = dLP + pLP + uLP; const tGP = dGP + uGP;
+  // Rentabilidad anual equivalente del múltiplo sobre todo el horizonte (no es la TIR del flujo mensual).
   const tirLP = lpC > 0 ? Math.pow(tLP/lpC, 1/yrs) - 1 : 0;
   const tirGP = gpC > 0 ? Math.pow(tGP/gpC, 1/yrs) - 1 : 0;
   return { lpC, gpC, hAmt, dLP, dGP, pLP, uLP, uGP, tLP, tGP, tirLP, tirGP, disp };
@@ -856,7 +859,7 @@ function renderWF(inp, m) {
     [['Capital LP aportado',      fM(wf.lpC)],  ['Capital GP aportado',   fM(wf.gpC)],
      ['Hurdle LP (retorno pref.)',fM(wf.hAmt)], ['Disponible a distribuir',fM(wf.disp)],
      ['Total LP recibe',          fM(wf.tLP)],  ['Total GP recibe',        fM(wf.tGP)],
-     ['TIR neta LP',              fP(wf.tirLP*100)], ['TIR neta GP',       fP(wf.tirGP*100)]]
+     ['Rentab. anual LP (múltiplo)', fP(wf.tirLP*100)], ['Rentab. anual GP (múltiplo)', fP(wf.tirGP*100)]]
     .map(([l,v]) => `<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:.5px solid var(--border)"><span style="color:var(--text-secondary)">${l}</span><span style="font-weight:500">${v}</span></div>`)
     .join('') + '</div>' +
     bars.map(b =>
@@ -903,8 +906,8 @@ function renderScen(inp, prog, m) {
       ${sr('Crédito desembolsado', fM(m2.montoDesemb))}
       ${sr('Intereses', fM(m2.totalInt))}
       ${sr('Pico equity', fM(m2.picoEq))}
-      ${sr('TIR LP', fP(wf2.tirLP*100))}
-      ${sr('TIR GP', fP(wf2.tirGP*100))}
+      ${sr('Rentab. anual LP', fP(wf2.tirLP*100))}
+      ${sr('Rentab. anual GP', fP(wf2.tirGP*100))}
       ${sr('Crédito abre', credAbre(m2) ? 'Sí ✓ mes '+(m2.mesAp+1) : m2.credEstado === 'tardio' ? 'No ✗ PEQ tras obra' : 'No ✗ PEQ no alcanzado')}
       <span class="badge b${viable}">${vl}</span></div>`;
   });
