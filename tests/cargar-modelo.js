@@ -12,7 +12,7 @@ function cargarModelo(archivo = path.join(__dirname, '..', 'index.html')) {
   const fabrica = new Function(
     `let curvaActiva = 'rapida';
      ${codigo}
-     return { calcProg, calcFin, calcModel, calcVPN, calcWF, setCurva: c => { curvaActiva = c; } };`
+     return { calcProg, calcFin, calcModel, calcVPN, calcVPNeq: (typeof calcVPNeq === 'function' ? calcVPNeq : null), calcWF, setCurva: c => { curvaActiva = c; } };`
   );
   return { ...fabrica(), html };
 }

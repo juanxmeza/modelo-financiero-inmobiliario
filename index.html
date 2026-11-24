@@ -316,9 +316,10 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
     <div class="panel">
       <div class="pt"><span class="dot db"></span>Flujo de caja neto mensual</div>
       <div class="legend">
-        <span class="li"><span class="ld" style="background:#1baf7a"></span>Ingresos mes</span>
-        <span class="li"><span class="ld" style="background:#e34948"></span>Egresos mes (construcción + intereses)</span>
-        <span class="li"><span class="ld" style="background:#2a78d6"></span>Flujo acumulado</span>
+        <span class="li"><span class="ld" style="background:#1baf7a"></span>Recaudo compradores</span>
+        <span class="li"><span class="ld" style="background:#0ea5e9"></span>Desembolso crédito</span>
+        <span class="li"><span class="ld" style="background:#e34948"></span>Egresos mes (obra + gastos + pago del crédito + impuesto)</span>
+        <span class="li"><span class="ld" style="background:#2a78d6"></span>Flujo acumulado del inversionista</span>
       </div>
       <div class="cw-xl"><canvas id="chartFlujos" role="img" aria-label="Flujo de caja neto mensual"></canvas></div>
     </div>
@@ -559,11 +560,12 @@ function calcModel(inp, prog, fin) {
 
   // Intereses sobre saldo vigente
   const tMens = inp.tcred / 12;
-  const saldoCred = Array(N).fill(0), intMes = Array(N).fill(0);
+  const saldoCred = Array(N).fill(0), intMes = Array(N).fill(0), pagoCred = Array(N).fill(0);
+  const mesPago = Math.min(finObra, N - 1);              // entrega; si la obra excede el horizonte, último mes
   let saldo = 0;
   for (let i = 0; i < N; i++) {
     saldo += desemb[i]; intMes[i] = saldo * tMens; saldo += intMes[i];
-    if (i === finObra && saldo > 0) saldo = 0;
+    if (i === mesPago && saldo > 0) { pagoCred[i] = saldo; saldo = 0; }   // principal + intereses capitalizados
     saldoCred[i] = saldo;
   }
   const totalInt   = intMes.reduce((a,b)=>a+b,0);
@@ -571,22 +573,37 @@ function calcModel(inp, prog, fin) {
   let acPO = 0; for (let i = 0; i <= ultObra; i++) acPO += ingPreventaMes[i];
   const prevObra = acPO;                                 // recaudo de preventa (sep + CI) hasta fin de obra
 
-  // Egresos totales
-  const egMes = Array(N).fill(0);
-  egMes[0] += prog.cT;
-  for (let i = 0; i < N; i++) egMes[i] += costConst[i] + costIndir[i] + intMes[i];
-  if (finObra < N) egMes[finObra] += saldoFinal;
-  for (let i = inicioV; i < N; i++) { const u = unidMes[i]; if (u > 0) egMes[i] += (fin.gC + fin.gA) * u; }
+  // Egresos operativos (sin deuda ni impuestos)
+  const gastosMes = Array(N).fill(0);
+  for (let i = inicioV; i < N; i++) { const u = unidMes[i]; if (u > 0) gastosMes[i] = (fin.gC + fin.gA) * u; }
+  const egOper = Array(N).fill(0);
+  egOper[0] += prog.cT;
+  for (let i = 0; i < N; i++) egOper[i] += costConst[i] + costIndir[i] + gastosMes[i];
 
-  // Flujos
-  const flujoNeto = ingTotalMes.map((v,i) => v - egMes[i]);
+  // Estado de resultados (gastos comerciales y administrativos solo sobre lo vendido)
+  const ingTot  = ingTotalMes.reduce((a,b)=>a+b,0);
+  const gCV     = fin.gC * vAcum, gAV = fin.gA * vAcum;
+  const uBruta  = ingTot - prog.cT - fin.cC - fin.cI;
+  const uAI     = uBruta - gCV - gAV - totalInt;
+  const impM    = Math.max(0, uAI * inp.imp);
+  const uN      = uAI - impM;
+  const mN      = ingTot > 0 ? uN / ingTot : 0;
+  const mB      = ingTot > 0 ? uBruta / ingTot : 0;
+  const impMes  = Array(N).fill(0); impMes[N-1] = impM;   // supuesto: el impuesto se paga al cierre
+
+  // Flujo de caja del inversionista (apalancado, después de impuestos):
+  //   + recaudo de compradores + desembolsos del crédito
+  //   − egresos operativos − pago del crédito (principal + intereses, una sola vez) − impuesto
+  // Los intereses NO se restan mes a mes: se capitalizan en el saldo y salen en pagoCred.
+  const egMes     = egOper.map((v,i) => v + pagoCred[i] + impMes[i]);
+  const flujoNeto = ingTotalMes.map((v,i) => v + desemb[i] - egMes[i]);
   let acF = 0; const flujoAcum = flujoNeto.map(f => { acF += f; return acF; });
-  let acE = 0; const egAcum    = egMes.map(e => { acE += e; return acE; });
   let acI = 0; const ingAcum   = ingTotalMes.map(v => { acI += v; return acI; });
   let acD = 0; const desAcum   = desemb.map(d => { acD += d; return acD; });
   let acP = 0; const prevAcum  = ingPreventaMes.map(v => { acP += v; return acP; });
 
-  // Equity requerido = brecha real
+  // Equity requerido = brecha entre egresos (operativos + pago del crédito) y fuentes (crédito + preventa)
+  let acE = 0; const egAcum    = egOper.map((e,i) => { acE += e + pagoCred[i]; return acE; });
   const equityReq = egAcum.map((e,i) => Math.max(0, e - desAcum[i] - prevAcum[i]));
   const picoEq    = Math.max(...equityReq, 0);
   const mesPico   = equityReq.indexOf(picoEq) + 1;
@@ -594,24 +611,18 @@ function calcModel(inp, prog, fin) {
   let payback = null;
   for (let i = 0; i < flujoAcum.length; i++) { if (flujoAcum[i] >= 0 && !payback) payback = i + 1; }
 
-  // Estado de resultados
-  const ingTot  = ingTotalMes.reduce((a,b)=>a+b,0);
-  const uBruta  = ingTot - prog.cT - fin.cC - fin.cI;
-  const uAI     = uBruta - fin.gC - fin.gA - totalInt;
-  const impM    = Math.max(0, uAI * inp.imp);
-  const uN      = uAI - impM;
-  const mN      = ingTot > 0 ? uN / ingTot : 0;
-  const mB      = ingTot > 0 ? uBruta / ingTot : 0;
   const MOIC    = picoEq > 0 ? (picoEq + uN) / picoEq : 1;
 
   return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, ingTotalMes, egMes, flujoNeto,
-    flujoAcum, egAcum, ingAcum, desemb, desAcum, saldoCred, intMes, equityReq,
+    flujoAcum, egAcum, ingAcum, egOper, pagoCred, impMes, gCV, gAV, mesPago, desemb, desAcum, saldoCred, intMes, equityReq,
     picoEq, mesPico, montoCred, montoDesemb, cupoNoDes, tramosEmit: tEmit, credEstado, mesUmbral, mesAp,
     prevObra, totalInt, saldoFinal, payback, vAcum,
     N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC };
 }
 
 function calcVPN(cf, r) { return cf.reduce((a,v,t) => a + v / Math.pow(1 + r/12, t), 0); }
+// VPN del flujo del inversionista; cada mes se descuenta a fin de mes (mes 1 → t = 1).
+function calcVPNeq(m, r) { return calcVPN([0, ...m.flujoNeto], r); }
 
 function calcWF(inp, m) {
   const lp = 1 - inp.gppct; const lpC = m.eqInv * lp; const gpC = m.eqInv * inp.gppct;
@@ -674,11 +685,12 @@ function renderChartFlujos(m) {
   const ctx = document.getElementById('chartFlujos').getContext('2d');
   const labs = Array.from({length:m.N}, (_,i) => 'M'+(i+1));
   charts['fl'] = new Chart(ctx, { type:'bar', data:{ labels:labs, datasets:[
-    { label:'Ingresos', data:scaleArr(m.ingTotalMes), backgroundColor:'rgba(27,175,122,0.65)', order:2 },
-    { label:'Egresos',  data:m.egMes.map(v=>Math.round(toDisp(-v)/( activeCur==='COP'?1e6:1e3/getTRM()))), backgroundColor:'rgba(227,73,72,0.55)', order:2 },
+    { label:'Ingresos', data:scaleArr(m.ingTotalMes), backgroundColor:'rgba(27,175,122,0.65)', stack:'in', order:2 },
+    { label:'Desembolso crédito', data:scaleArr(m.desemb), backgroundColor:'rgba(14,165,233,0.65)', stack:'in', order:2 },
+    { label:'Egresos',  data:m.egMes.map(v=>Math.round(toDisp(-v)/( activeCur==='COP'?1e6:1e3/getTRM()))), backgroundColor:'rgba(227,73,72,0.55)', stack:'out', order:2 },
     { label:'Acumulado',data:scaleArr(m.flujoAcum), type:'line', borderColor:'#2a78d6', borderWidth:2, pointRadius:0, fill:false, order:1 }
   ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-    scales:{x:{ticks:{font:{size:9},autoSkip:true,maxTicksLimit:15}}, y:{ticks:{font:{size:9},callback:v=>chartLabel(v)}}}}});
+    scales:{x:{stacked:true,ticks:{font:{size:9},autoSkip:true,maxTicksLimit:15}}, y:{stacked:true,ticks:{font:{size:9},callback:v=>chartLabel(v)}}}}});
 }
 
 // ── Textos del crédito (única fuente para panel, KPI, banner, alertas y escenarios) ──
@@ -704,14 +716,14 @@ function renderCredPanel(inp, prog, fin, m) {
     {cls:'cc-eq',  lbl:'Equity pico requerido',     val:fM(m.picoEq),    sub:'Mes '+m.mesPico+' · '+fP(pctCosto)+' del costo total'},
     {cls:'cc-cred',lbl:'Crédito desembolsado',       val:fM(m.montoDesemb), sub:'Cupo teórico '+fM(m.montoCred)+' · '+fP(inp.pfinc*100)+' del costo directo'},
     {cls:'cc-int', lbl:'Intereses totales',           val:fM(m.totalInt),  sub:'Tasa '+fP(inp.tcred*100)+' anual sobre saldo vigente'},
-    {cls:'cc-sal', lbl:'Saldo al cancelar crédito',  val:fM(m.saldoFinal),sub:m.montoDesemb > 0 ? 'Pagado con saldo compradores en mes '+m.finObra : 'Sin crédito que cancelar'}
+    {cls:'cc-sal', lbl:'Saldo al cancelar crédito',  val:fM(m.saldoFinal),sub:m.montoDesemb > 0 ? 'Principal + intereses · se paga con saldo compradores en mes '+(m.mesPago+1) : 'Sin crédito que cancelar'}
   ].map(c=>`<div class="cc ${c.cls}"><div class="cc-label">${c.lbl}</div><div class="cc-val">${c.val}</div><div class="cc-sub">${c.sub}</div></div>`).join('');
 
   const abre = credAbre(m) ? 'Mes '+(m.mesAp+1) : 'No abre';
   document.getElementById('phase-ind').innerHTML = [
     {n:'Mes 1',             l:'Compra terreno + inicio preventa'},
     {n:abre,                l:'Apertura crédito constructor (PEQ)'},
-    {n:'Mes '+m.finObra,    l:m.montoDesemb > 0 ? 'Entrega · saldo compradores · cancela crédito' : 'Entrega · saldo compradores'},
+    {n:'Mes '+(m.mesPago+1), l:m.montoDesemb > 0 ? 'Entrega · saldo compradores · cancela crédito' : 'Entrega · saldo compradores'},
     {n:m.payback?'Mes '+m.payback:'—', l:'Payback equity inversionistas'}
   ].map(p=>`<div class="ph"><div class="ph-num">${p.n}</div><div class="ph-label">${p.l}</div></div>`).join('');
 
@@ -725,7 +737,7 @@ function renderKPIs(inp, m) {
   document.getElementById('k-marg').textContent = 'Margen neto: ' + fP(m.mN*100);
   const tir = Math.pow(m.MOIC, 12/inp.dtotal) - 1;
   document.getElementById('k-tir').textContent  = fP(tir*100);
-  document.getElementById('k-vpn').textContent  = fM(calcVPN([-m.eqInv,...m.flujoNeto], inp.tvpn));
+  document.getElementById('k-vpn').textContent  = fM(calcVPNeq(m, inp.tvpn));
   document.getElementById('k-vpns').textContent = '@ ' + fP(inp.tvpn*100);
   document.getElementById('k-cred').textContent = fM(m.montoDesemb);
   document.getElementById('k-cred-sub').textContent = (credAbre(m) ? 'Abre mes '+(m.mesAp+1)+' ✓' : m.credEstado === 'tardio' ? 'PEQ tras fin de obra ✗' : 'PEQ no alcanzado ✗') + ' · cupo ' + fM(m.montoCred);
@@ -783,8 +795,8 @@ function renderER(inp, prog, fin, m) {
     erRow('Costo directo construcción', -fin.cC, 0, 1) +
     erRow('Costos indirectos', -fin.cI, 0, 1) +
     erRow('Utilidad bruta', m.uBruta, 1) +
-    erRow('Gastos comerciales', -fin.gC, 0, 1) +
-    erRow('Gastos administrativos', -fin.gA, 0, 1) +
+    erRow('Gastos comerciales', -m.gCV, 0, 1) +
+    erRow('Gastos administrativos', -m.gAV, 0, 1) +
     erRow('Intereses crédito constructor', -m.totalInt, 0, 1) +
     erRow('Utilidad antes de impuestos', m.uAI, 1) +
     erRow('Impuesto a la renta', -m.impM, 0, 1) +
@@ -855,7 +867,7 @@ function renderScen(inp, prog, m) {
     const m2  = calcModel(inp, prog, f2);
     const wf2 = calcWF(inp, m2);
     const tir = Math.pow(m2.MOIC, 12/inp.dtotal) - 1;
-    const vpn = calcVPN([-m2.eqInv,...m2.flujoNeto], inp.tvpn);
+    const vpn = calcVPNeq(m2, inp.tvpn);
     const viable = tir > inp.hurdle ? 'v' : tir > 0 ? 'm' : 'n';
     const vl     = tir > inp.hurdle ? 'VIABLE' : tir > 0 ? 'MARGINAL' : 'NO VIABLE';
     h += `<div class="sc ${s.cl}"><div class="sc-title">${s.l}</div>
@@ -929,7 +941,7 @@ update();
   function rTri(a,m,b,rng){ const u=rng(), fc=(m-a)/(b-a); return u<fc ? a+Math.sqrt(u*(b-a)*(m-a)) : b-Math.sqrt((1-u)*(b-a)*(b-m)); }
   function muestra(d,rng){ if(d.tipo==='pert'){ const al=1+4*(d.moda-d.min)/(d.max-d.min), be=1+4*(d.max-d.moda)/(d.max-d.min); return d.min+(d.max-d.min)*rBeta(al,be,rng); } return rTri(d.min,d.moda,d.max,rng); }
   function salidasDe(inp){ const prog=calcProg(inp), fin=calcFin(inp,prog), m=calcModel(inp,prog,fin), wf=calcWF(inp,m);
-    return { tir:Math.pow(m.MOIC,12/inp.dtotal)-1, vpn:calcVPN([-m.eqInv,...m.flujoNeto],inp.tvpn), tirLP:wf.tirLP, tirGP:wf.tirGP }; }
+    return { tir:Math.pow(m.MOIC,12/inp.dtotal)-1, vpn:calcVPNeq(m,inp.tvpn), tirLP:wf.tirLP, tirGP:wf.tirGP }; }
   const DRIVERS=[
     {key:'pv',label:'Precio de venta',unidad:'COP/m²',f:1,dec:0,lo:0.85,hi:1.15},
     {key:'csr',label:'Costo construcción (sobre rasante)',unidad:'COP/m²',f:1,dec:0,lo:0.90,hi:1.15},

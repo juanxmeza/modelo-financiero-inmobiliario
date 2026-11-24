@@ -25,7 +25,8 @@ function assertSinCredito({ m, prog, fin }, inp) {
   // solo terreno, costos de obra ejecutados dentro del horizonte y gastos sobre lo vendido.
   const k = (Math.min(m.finObra, m.N) - inp.dprev) / inp.dobra;
   const egSinDeuda = prog.cT + (fin.cC + fin.cI) * k + (fin.gC + fin.gA) * m.vAcum;
-  assert.ok(Math.abs(suma(m.egMes) - egSinDeuda) < 1, 'egresos sin intereses ni repago');
+  assert.ok(Math.abs(suma(m.egMes) - m.impM - egSinDeuda) < 1, 'egresos sin intereses ni repago');
+  assert.ok(m.pagoCred.every(v => v === 0), 'pago del crédito');
 }
 
 test('retraso 6 meses, umbral 90 %: el umbral llega en el mes 12, después de la obra → sin desembolsos', () => {
