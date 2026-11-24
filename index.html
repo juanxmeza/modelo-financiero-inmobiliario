@@ -937,7 +937,7 @@ update();
     {key:'ciind',label:'Costos indirectos',unidad:'%',f:100,dec:1,lo:0.85,hi:1.20},
     {key:'rpico',label:'Ritmo pico de absorción',unidad:'%/mes',f:100,dec:1,lo:0.70,hi:1.20},
     {key:'tcred',label:'Tasa crédito constructor',unidad:'% anual',f:100,dec:1,lo:0.85,hi:1.20},
-    {key:'retraso',label:'Retraso inicio de ventas',unidad:'meses',f:1,dec:0,lo:0,hi:0}
+    {key:'retraso',label:'Retraso inicio de ventas',unidad:'meses',f:1,dec:0,lo:0,hi:0,entero:true}
   ];
   function q(sel){ return document.querySelector(sel); }
   function pintarTabla(){
@@ -977,7 +977,7 @@ update();
     const inp0=getInp();
     const act=[];
     document.querySelectorAll('.mc-on').forEach(function(cb){ if(cb.checked){ const i=+cb.dataset.i, d=DRIVERS[i];
-      act.push({ key:d.key, label:d.label, tipo:q('.mc-dist[data-i="'+i+'"]').value,
+      act.push({ key:d.key, label:d.label, entero:!!d.entero, tipo:q('.mc-dist[data-i="'+i+'"]').value,
         min:parseFloat(q('.mc-min[data-i="'+i+'"]').value)/d.f, moda:parseFloat(q('.mc-mo[data-i="'+i+'"]').value)/d.f, max:parseFloat(q('.mc-mx[data-i="'+i+'"]').value)/d.f }); } });
     if(!act.length){ err.textContent='Marca al menos una variable para variar (casilla «Variar»).'; return; }
     for(const a of act){ if(!(a.min<=a.moda && a.moda<=a.max && a.min<a.max)){ err.textContent='En «'+a.label+'»: se requiere mínimo ≤ más probable ≤ máximo (y mínimo < máximo).'; return; } }
@@ -991,7 +991,7 @@ update();
       const drv=act.map(function(){return new Float64Array(N);});
       let nOK=0;
       for(let it=0; it<N; it++){ const inp=Object.assign({},inp0);
-        for(let j=0;j<act.length;j++){ const v=muestra(act[j],rng); inp[act[j].key]=v; drv[j][it]=v; }
+        for(let j=0;j<act.length;j++){ let v=muestra(act[j],rng); if(act[j].entero) v=Math.round(v); /* el modelo es mensual: un retraso fraccionario produce NaN */ inp[act[j].key]=v; drv[j][it]=v; }
         const o=salidasDe(inp); tir[it]=o.tir; vpn[it]=o.vpn; tlp[it]=o.tirLP; tgp[it]=o.tirGP; if(isFinite(o.tir))nOK++;
       }
       const tS=Float64Array.from(tir).filter(isFinite).sort(), vS=Float64Array.from(vpn).filter(isFinite).sort();

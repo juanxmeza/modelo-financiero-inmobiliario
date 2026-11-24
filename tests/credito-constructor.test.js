@@ -145,3 +145,10 @@ test('avisos, indicadores y Monte Carlo dependen del estado calculado, no de una
   assert.equal(js.match(/function calcModel\(/g).length, 1);
   assert.match(js, /function salidasDe\(inp\)\{[^}]*calcModel\(inp,prog,fin\)/);
 });
+
+test('Monte Carlo redondea el retraso a meses enteros (un retraso fraccionario rompe el modelo mensual)', () => {
+  const { m } = correr(M, inpBase({ retraso: 1.4 }));
+  assert.ok(Number.isNaN(m.vAcum), 'si esto deja de ser NaN, el redondeo en Monte Carlo puede revisarse');
+  assert.match(M.html, /key:'retraso'[^}]*entero:true/);
+  assert.match(M.html, /if\(act\[j\]\.entero\) v=Math\.round\(v\)/);
+});
