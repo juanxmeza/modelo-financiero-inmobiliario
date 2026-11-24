@@ -10,7 +10,7 @@ Reglas que aplica `calcModel()` en `index.html`. Las del crédito están en `cre
 + recaudo de compradores (separación, cuotas iniciales, saldo)
 + desembolsos del crédito constructor
 − egresos operativos (terreno, obra, indirectos, comisiones, administración)
-− servicio del crédito: intereses cada mes; principal en el mes de la entrega
+− servicio del crédito: intereses por trimestre vencido; principal en el mes de la entrega
 − impuesto de renta, en el último mes
 ```
 

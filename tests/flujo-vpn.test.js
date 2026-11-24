@@ -28,16 +28,17 @@ test('el flujo neto suma exactamente la utilidad neta (ni deuda fantasma ni inte
   assert.ok(n > 2000);
 });
 
-test('los desembolsos entran al flujo y los intereses salen cada mes', () => {
+test('los desembolsos entran al flujo y los intereses salen cuando se pagan, no cuando se causan', () => {
   const { m } = correr(M, inpRepro({ retraso: 0, rpico: 0.20, peq: 0.40 }));
   for (const mes of [7, 8, 9]) {
     const i = mes - 1;
     assert.ok(m.desemb[i] > 0 && m.intMes[i] > 0);
-    assert.ok(Math.abs(m.flujoNeto[i] - (m.ingTotalMes[i] + m.desemb[i] - m.egOper[i] - m.intMes[i])) < 1, 'mes ' + mes);
+    assert.ok(Math.abs(m.flujoNeto[i] - (m.ingTotalMes[i] + m.desemb[i] - m.egOper[i] - m.intPag[i])) < 1, 'mes ' + mes);
   }
+  assert.equal(m.intPag[6], 0); assert.equal(m.intPag[7], 0); assert.ok(m.intPag[8] > 0);
   // el principal se cancela en el mes de la entrega (mes 10)
   assert.equal(m.mesPago + 1, 10);
-  assert.ok(Math.abs(m.pagoCred[9] - (m.montoDesemb + m.intMes[9])) < 1);
+  assert.ok(Math.abs(m.pagoCred[9] - (m.montoDesemb + m.intPag[9])) < 1);
   assert.ok(m.saldoCred.slice(9).every(v => v === 0));
 });
 

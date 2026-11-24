@@ -568,15 +568,18 @@ function calcModel(inp, prog, fin) {
   const montoDesemb = desemb.reduce((a,b)=>a+b,0);
   const giroApertura = mesAp >= 0 ? desemb[mesAp] : 0;
 
-  // Intereses: se pagan cada mes sobre el principal vigente (sin capitalizar).
+  // Intereses: se causan cada mes sobre el principal vigente (sin capitalizar) y se pagan por
+  // trimestre vencido, contado desde el primer giro. Lo causado y aún no pagado se liquida en la entrega.
   // El principal se cancela en el mes de la entrega, con el saldo de los compradores.
   const tMens = inp.tcred / 12;
-  const saldoCred = Array(N).fill(0), intMes = Array(N).fill(0), pagoCred = Array(N).fill(0);
+  const saldoCred = Array(N).fill(0), intMes = Array(N).fill(0), intPag = Array(N).fill(0), pagoCred = Array(N).fill(0);
   const mesPago = finObra;                               // mes de la entrega (siempre dentro del horizonte)
-  let saldo = 0;
+  let saldo = 0, intPend = 0;
   for (let i = 0; i < N; i++) {
-    saldo += desemb[i]; intMes[i] = saldo * tMens;
-    pagoCred[i] = intMes[i];
+    saldo += desemb[i]; intMes[i] = saldo * tMens; intPend += intMes[i];
+    const cierraTrimestre = mesAp >= 0 && i >= mesAp && (i - mesAp + 1) % 3 === 0;
+    if ((cierraTrimestre || i === mesPago) && intPend > 0) { intPag[i] = intPend; intPend = 0; }
+    pagoCred[i] = intPag[i];
     if (i === mesPago && saldo > 0) { pagoCred[i] += saldo; saldo = 0; }
     saldoCred[i] = saldo;
   }
@@ -605,7 +608,7 @@ function calcModel(inp, prog, fin) {
 
   // Flujo de caja del inversionista (apalancado, después de impuestos):
   //   + recaudo de compradores + desembolsos del crédito
-  //   − egresos operativos − servicio del crédito (intereses cada mes; principal en la entrega) − impuesto
+  //   − egresos operativos − servicio del crédito (intereses por trimestre vencido; principal en la entrega) − impuesto
   const egMes     = egOper.map((v,i) => v + pagoCred[i] + impMes[i]);
   const flujoNeto = ingTotalMes.map((v,i) => v + desemb[i] - egMes[i]);
   let acF = 0; const flujoAcum = flujoNeto.map(f => { acF += f; return acF; });
@@ -630,7 +633,7 @@ function calcModel(inp, prog, fin) {
   let acPv = 0; const prevAcum = ingPreventaMes.map(v => { acPv += v; return acPv; });
 
   return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, ingTotalMes, egMes, flujoNeto,
-    flujoAcum, egAcum, ingAcum, egOper, pagoCred, impMes, gCV, gAV, mesPago, desemb, desAcum, saldoCred, intMes, equityReq,
+    flujoAcum, egAcum, ingAcum, egOper, pagoCred, intPag, impMes, gCV, gAV, mesPago, desemb, desAcum, saldoCred, intMes, equityReq,
     picoEq, mesPico, montoCred, montoDesemb, giroApertura, credEstado, mesUmbral, mesAp,
     prevObra, totalInt, horizonteExt, payback, vAcum,
     N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC, tir, tirEstado: tirInfo.estado, tirRaices: tirInfo.raices, faltaPago, prevAcum };
@@ -778,7 +781,7 @@ function renderCredPanel(inp, prog, fin, m) {
   document.getElementById('cred-grid').innerHTML = [
     {cls:'cc-eq',  lbl:'Equity pico requerido',     val:fM(m.picoEq),    sub:'Mes '+m.mesPico+' · '+fP(pctCosto)+' del costo total'},
     {cls:'cc-cred',lbl:'Crédito desembolsado',       val:fM(m.montoDesemb), sub:'Cupo teórico '+fM(m.montoCred)+' · '+fP(inp.pfinc*100)+' del costo directo'},
-    {cls:'cc-int', lbl:'Intereses totales',           val:fM(m.totalInt),  sub:'Tasa '+fP(inp.tcred*100)+' anual · se pagan cada mes'},
+    {cls:'cc-int', lbl:'Intereses totales',           val:fM(m.totalInt),  sub:'Tasa '+fP(inp.tcred*100)+' anual · se pagan cada trimestre'},
     {cls:'cc-sal', lbl:'Principal a cancelar',       val:fM(m.montoDesemb), sub:m.montoDesemb > 0 ? 'En la entrega, mes '+(m.mesPago+1)+(m.faltaPago > 1 ? ' · el saldo de compradores no alcanza: faltan '+fM(m.faltaPago) : ' · cubierto por el saldo de compradores') : 'Sin crédito que cancelar'}
   ].map(c=>`<div class="cc ${c.cls}"><div class="cc-label">${c.lbl}</div><div class="cc-val">${c.val}</div><div class="cc-sub">${c.sub}</div></div>`).join('');
 

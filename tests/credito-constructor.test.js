@@ -130,22 +130,38 @@ test('ventas acumuladas iguales al umbral salvo error de coma flotante cuentan c
   assert.equal(m.mesAp + 1, 14);
 });
 
-test('intereses: se pagan cada mes sobre el principal vigente, sin capitalizar; el principal se cancela en la entrega', () => {
+test('intereses: se causan cada mes sobre el principal y se pagan por trimestre vencido desde el primer giro', () => {
   const inp = inpBase();
   const { m } = correr(M, inp);
   assert.ok(m.montoDesemb > 0);
-  let principal = 0;
+  assert.equal(m.mesAp + 1, 12); assert.equal(m.mesPago + 1, 23);
+  let principal = 0, pendiente = 0;
   for (let i = 0; i < m.N; i++) {
     principal += m.desemb[i];
     const int = principal * inp.tcred / 12;
-    assert.ok(Math.abs(m.intMes[i] - int) < 1e-6, 'interés del mes ' + (i + 1));
-    if (i === m.mesPago) {
-      assert.ok(Math.abs(m.pagoCred[i] - (int + principal)) < 1e-6, 'entrega: interés del mes + todo el principal');
-      principal = 0;
-    } else assert.ok(Math.abs(m.pagoCred[i] - int) < 1e-6, 'mes ' + (i + 1) + ': solo intereses');
+    assert.ok(Math.abs(m.intMes[i] - int) < 1e-6, 'interés causado en el mes ' + (i + 1));
+    pendiente += int;
+    const trimestre = i >= m.mesAp && (i - m.mesAp + 1) % 3 === 0;
+    let pago = 0;
+    if (trimestre || i === m.mesPago) { pago = pendiente; pendiente = 0; }
+    assert.ok(Math.abs(m.intPag[i] - pago) < 1e-6, 'interés pagado en el mes ' + (i + 1));
+    if (i === m.mesPago) { pago += principal; principal = 0; }
+    assert.ok(Math.abs(m.pagoCred[i] - pago) < 1e-6, 'servicio del mes ' + (i + 1));
     assert.ok(Math.abs(m.saldoCred[i] - principal) < 1e-6, 'el saldo es solo principal');
   }
+  // apertura en el mes 12: pagos de intereses en los meses 14, 17, 20 y 23 (trimestre y entrega coinciden)
+  assert.deepEqual(mesesCon(m.intPag), [14, 17, 20, 23]);
+  assert.ok(Math.abs(suma(m.intPag) - m.totalInt) < 1e-6, 'todo lo causado se paga');
   assert.equal(m.mesPago, m.finObra);
+});
+
+test('intereses: lo causado entre el último trimestre y la entrega se liquida en la entrega', () => {
+  // escenario de control: apertura en el mes 7, entrega en el mes 10 → un trimestre (mes 9) y remanente (mes 10)
+  const { m } = correr(M, esc({ retraso: 0 }));
+  assert.deepEqual(mesesCon(m.intPag), [9, 10]);
+  assert.ok(Math.abs(m.intPag[8] - (m.intMes[6] + m.intMes[7] + m.intMes[8])) < 1e-6);
+  assert.ok(Math.abs(m.intPag[9] - m.intMes[9]) < 1e-6);
+  assert.ok(Math.abs(m.pagoCred[9] - (m.intMes[9] + m.montoDesemb)) < 1e-6);
 });
 
 test('avisos, indicadores y Monte Carlo dependen del estado calculado, no de una segunda regla', () => {
