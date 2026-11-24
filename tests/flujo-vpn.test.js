@@ -55,3 +55,24 @@ test('estado de resultados: gastos comerciales y administrativos solo sobre lo v
   assert.ok(Math.abs(m.vAcum - 0.5) < 1e-9);
   assert.ok(Math.abs(m.gCV - fin.gC * 0.5) < 1 && Math.abs(m.gAV - fin.gA * 0.5) < 1);
 });
+
+test('recaudo: lo vendido se cobra completo (separación + cuota inicial + saldo), sin perder la cuota inicial', () => {
+  for (const curva of ['s', 'rapida', 'lenta', 'lineal']) {
+    M.setCurva(curva);
+    for (const retraso of [0, 3, 6, 8, 12]) for (const mesci of [1, 3, 6]) for (const base of [inpBase, inpRepro]) {
+      const inp = base({ retraso, mesci });
+      const { m, fin } = correr(M, inp);
+      assert.ok(Math.abs(m.ingTot - fin.ingT * m.vAcum) < 1, JSON.stringify({ curva, retraso, mesci, dtotal: inp.dtotal }));
+    }
+  }
+  M.setCurva('rapida');
+});
+
+test('recaudo: ninguna unidad paga antes de venderse', () => {
+  const { m } = correr(M, inpRepro({ retraso: 6 }));   // ventas en los meses 10, 11 y 12; entrega en el mes 10
+  let cobrado = 0, vendido = 0;
+  for (let i = 0; i < m.N; i++) {
+    cobrado += m.ingTotalMes[i]; vendido += m.unidMes[i];
+    assert.ok(cobrado <= m.ingTot / m.vAcum * vendido + 1, 'mes ' + (i + 1));
+  }
+});

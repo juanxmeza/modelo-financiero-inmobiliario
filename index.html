@@ -519,10 +519,16 @@ function calcModel(inp, prog, fin) {
     const ingU = fin.ingT * u;
     ingSep[i] += ingU * inp.sepPct;
     const iniCI = i + inp.mesci;
-    const mCI   = Math.max(1, finObra - iniCI);
-    const cuota = (ingU * inp.ciPct) / mCI;
-    for (let j = iniCI; j < finObra && j < N; j++) ingCI[j] += cuota;
-    if (finObra < N) ingSal[finObra] += ingU * inp.salPct;
+    // La cuota inicial se difiere hasta la entrega. Si ya no caben cuotas (venta en los últimos
+    // meses de obra o después de la entrega), ese valor se cobra junto con el saldo: no se pierde.
+    let ciEnSaldo = 0;
+    if (iniCI < finObra) {
+      const cuota = (ingU * inp.ciPct) / (finObra - iniCI);
+      for (let j = iniCI; j < finObra && j < N; j++) ingCI[j] += cuota;
+    } else ciEnSaldo = ingU * inp.ciPct;
+    // El saldo se cobra en la entrega; las ventas posteriores a la entrega, en el mes de la venta.
+    const mesSal = Math.max(finObra, i);
+    if (mesSal < N) ingSal[mesSal] += ingU * inp.salPct + ciEnSaldo;
   }
   const ingPreventaMes = ingSep.map((s,i) => s + ingCI[i]);
   const ingTotalMes    = ingPreventaMes.map((v,i) => v + ingSal[i]);
