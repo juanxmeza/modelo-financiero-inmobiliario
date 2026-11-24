@@ -22,7 +22,16 @@ Supuestos:
 
 - Los intereses se capitalizan en el saldo y se pagan al cancelar el crédito. No hay pago mensual de intereses.
 - El impuesto se paga completo en el último mes del horizonte.
-- Si la obra termina después del horizonte, el crédito se cancela en el último mes.
+- El crédito se cancela en el mes de la entrega (el siguiente al último mes de obra). El panel muestra ese pago real (principal + todos los intereses).
+
+## Horizonte
+
+El horizonte siempre contiene el mes de la entrega. Si la «duración total» indicada es menor que `preventa + obra + 1`, el modelo se calcula hasta el mes de la entrega y muestra una alerta. Truncarlo dejaría fuera costos de obra, el saldo de compradores y el pago del crédito, y la caja dejaría de cuadrar con la utilidad.
+
+## Monte Carlo
+
+- El retraso de ventas se redondea a meses enteros y debe estar dentro del rango del control (0 a 12). Ninguna variable admite mínimos negativos.
+- El tornado usa correlación de Spearman con rangos promedio en empates. Si una variable no varía en la muestra (por ejemplo, un retraso que siempre redondea al mismo mes), se indica «sin variación» en vez de un coeficiente.
 
 ## Recaudo
 

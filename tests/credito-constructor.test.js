@@ -23,7 +23,7 @@ function assertSinCredito({ m, prog, fin }, inp) {
   assert.equal(m.cupoNoDes, m.montoCred);
   // Sin crédito, los egresos del flujo no pueden contener ningún movimiento de deuda:
   // solo terreno, costos de obra ejecutados dentro del horizonte y gastos sobre lo vendido.
-  const k = (Math.min(m.finObra, m.N) - inp.dprev) / inp.dobra;
+  const k = 1;   // el horizonte siempre contiene toda la obra
   const egSinDeuda = prog.cT + (fin.cC + fin.cI) * k + (fin.gC + fin.gA) * m.vAcum;
   assert.ok(Math.abs(suma(m.egMes) - m.impM - egSinDeuda) < 1, 'egresos sin intereses ni repago');
   assert.ok(m.pagoCred.every(v => v === 0), 'pago del crédito');
@@ -92,7 +92,7 @@ test('invariantes en una malla de supuestos (los mismos que recorre Monte Carlo)
     for (const rpico of [0.02, 0.08, 0.15]) {
       const inp = inpBase({ dtotal, dprev, dobra, retraso, peq, tramos, rpico });
       const r = correr(M, inp), m = r.m;
-      const N = inp.dtotal, ultObra = Math.min(dprev + dobra, N) - 1;
+      const N = m.N, ultObra = dprev + dobra - 1;
       const ctx = JSON.stringify({ curva, dtotal, dprev, dobra, retraso, peq, tramos, rpico });
       n++;
       // mes real del umbral, recalculado de forma independiente
@@ -134,7 +134,7 @@ test('los intereses siguen la misma tasa y fórmula sobre el saldo vigente', () 
   const inp = inpBase();
   const { m } = correr(M, inp);
   let saldo = 0;
-  for (let i = 0; i < inp.dtotal; i++) {
+  for (let i = 0; i < m.N; i++) {
     saldo += m.desemb[i];
     const int = saldo * inp.tcred / 12;
     assert.ok(Math.abs(m.intMes[i] - int) < 1e-6, 'mes ' + (i + 1));

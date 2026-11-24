@@ -497,9 +497,13 @@ function calcFin(inp, prog, pvMult = 1) {
 
 // ── Modelo completo mes a mes (en COP) ───────────────────────────
 function calcModel(inp, prog, fin) {
-  const N      = inp.dtotal;
   const inicioV = inp.dprev + inp.retraso;
   const finObra = inp.dprev + inp.dobra;
+  // El horizonte debe contener el mes de la entrega (el siguiente al último mes de obra): ahí se
+  // cobra el saldo de compradores y se cancela el crédito. Si la duración total indicada es menor,
+  // el modelo se extiende hasta ese mes y lo avisa; truncarlo dejaría costos, recaudo y deuda a medias.
+  const N      = Math.max(inp.dtotal, finObra + 1);
+  const horizonteExt = N > inp.dtotal;
   const mVenta  = Math.max(1, N - inicioV);
 
   // Absorción
@@ -568,7 +572,7 @@ function calcModel(inp, prog, fin) {
   // Intereses sobre saldo vigente
   const tMens = inp.tcred / 12;
   const saldoCred = Array(N).fill(0), intMes = Array(N).fill(0), pagoCred = Array(N).fill(0);
-  const mesPago = Math.min(finObra, N - 1);              // entrega; si la obra excede el horizonte, último mes
+  const mesPago = finObra;                               // mes de la entrega (siempre dentro del horizonte)
   let saldo = 0;
   for (let i = 0; i < N; i++) {
     saldo += desemb[i]; intMes[i] = saldo * tMens; saldo += intMes[i];
@@ -623,7 +627,7 @@ function calcModel(inp, prog, fin) {
   return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, ingTotalMes, egMes, flujoNeto,
     flujoAcum, egAcum, ingAcum, egOper, pagoCred, impMes, gCV, gAV, mesPago, desemb, desAcum, saldoCred, intMes, equityReq,
     picoEq, mesPico, montoCred, montoDesemb, cupoNoDes, tramosEmit: tEmit, credEstado, mesUmbral, mesAp,
-    prevObra, totalInt, saldoFinal, payback, vAcum,
+    prevObra, totalInt, saldoFinal, pagoTotal: pagoCred.reduce((a,b)=>a+b,0), horizonteExt, payback, vAcum,
     N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC };
 }
 
@@ -633,7 +637,7 @@ function calcVPNeq(m, r) { return calcVPN([0, ...m.flujoNeto], r); }
 
 function calcWF(inp, m) {
   const lp = 1 - inp.gppct; const lpC = m.eqInv * lp; const gpC = m.eqInv * inp.gppct;
-  const yrs = inp.dtotal / 12; const hAmt = lpC * (Math.pow(1+inp.hurdle, yrs) - 1);
+  const yrs = m.N / 12; const hAmt = lpC * (Math.pow(1+inp.hurdle, yrs) - 1);
   const disp = Math.max(0, m.uN); let r = disp;
   const dLP = Math.min(r, lpC); r -= dLP;
   const dGP = Math.min(r, gpC); r -= dGP;
@@ -723,7 +727,7 @@ function renderCredPanel(inp, prog, fin, m) {
     {cls:'cc-eq',  lbl:'Equity pico requerido',     val:fM(m.picoEq),    sub:'Mes '+m.mesPico+' · '+fP(pctCosto)+' del costo total'},
     {cls:'cc-cred',lbl:'Crédito desembolsado',       val:fM(m.montoDesemb), sub:'Cupo teórico '+fM(m.montoCred)+' · '+fP(inp.pfinc*100)+' del costo directo'},
     {cls:'cc-int', lbl:'Intereses totales',           val:fM(m.totalInt),  sub:'Tasa '+fP(inp.tcred*100)+' anual sobre saldo vigente'},
-    {cls:'cc-sal', lbl:'Saldo al cancelar crédito',  val:fM(m.saldoFinal),sub:m.montoDesemb > 0 ? 'Principal + intereses · se paga con saldo compradores en mes '+(m.mesPago+1) : 'Sin crédito que cancelar'}
+    {cls:'cc-sal', lbl:'Pago al cancelar crédito',   val:fM(m.pagoTotal), sub:m.montoDesemb > 0 ? 'Principal + intereses · en la entrega, mes '+(m.mesPago+1) : 'Sin crédito que cancelar'}
   ].map(c=>`<div class="cc ${c.cls}"><div class="cc-label">${c.lbl}</div><div class="cc-val">${c.val}</div><div class="cc-sub">${c.sub}</div></div>`).join('');
 
   const abre = credAbre(m) ? 'Mes '+(m.mesAp+1) : 'No abre';
@@ -742,7 +746,7 @@ function renderCredPanel(inp, prog, fin, m) {
 function renderKPIs(inp, m) {
   document.getElementById('k-util').textContent = fM(m.uN);
   document.getElementById('k-marg').textContent = 'Margen neto: ' + fP(m.mN*100);
-  const tir = Math.pow(m.MOIC, 12/inp.dtotal) - 1;
+  const tir = Math.pow(m.MOIC, 12/m.N) - 1;
   document.getElementById('k-tir').textContent  = fP(tir*100);
   document.getElementById('k-vpn').textContent  = fM(calcVPNeq(m, inp.tvpn));
   document.getElementById('k-vpns').textContent = '@ ' + fP(inp.tvpn*100);
@@ -771,8 +775,9 @@ function renderBanner(inp, m, fin) {
 }
 
 function renderAlerts(inp, m, fin) {
-  const tir = Math.pow(m.MOIC, 12/inp.dtotal) - 1;
+  const tir = Math.pow(m.MOIC, 12/m.N) - 1;
   const al = [];
+  if (m.horizonteExt) al.push({t:'amber', m:`La duración total indicada (${inp.dtotal} meses) no alcanza a incluir la entrega: preventa (${inp.dprev}) + obra (${inp.dobra}) terminan en el mes ${m.finObra} y la entrega es en el mes ${m.finObra+1}. El modelo se calcula a ${m.N} meses.`, f:'Aumenta la duración total o reduce preventa u obra.'});
   if (!credAbre(m)) al.push({t:'red',   m:credMotivo(inp, m), f:credFuentes(m)});
   else if (m.cupoNoDes > 1) al.push({t:'amber', m:credParcial(inp, m), f:'Supuesto del modelo: el remanente no se concentra en el último mes.'});
   if (tir < 0)           al.push({t:'red',   m:`TIR negativa (${fP(tir*100)}). El proyecto destruye valor incluyendo el costo de la deuda.`, f:'Ajusta precios o reduce costos directos.'});
@@ -857,7 +862,7 @@ function renderSens(inp, prog) {
     pd.forEach(p => {
       const f2 = calcFin(inp, prog, 1+p);
       const m2 = calcModel(Object.assign({}, inp, { rpico: inp.rpico * (1 + r) }), prog, f2);
-      const tir = Math.pow(m2.MOIC, 12/inp.dtotal) - 1;
+      const tir = Math.pow(m2.MOIC, 12/m2.N) - 1;
       const c = tir > inp.hurdle ? 'sg2' : tir > 0 ? 'sm2' : 'sb2';
       h += `<td><span class="sc-cell ${c}">${fP(tir*100)}</span></td>`;
     });
@@ -873,7 +878,7 @@ function renderScen(inp, prog, m) {
     const f2  = calcFin(inp, prog, s.pM);
     const m2  = calcModel(inp, prog, f2);
     const wf2 = calcWF(inp, m2);
-    const tir = Math.pow(m2.MOIC, 12/inp.dtotal) - 1;
+    const tir = Math.pow(m2.MOIC, 12/m2.N) - 1;
     const vpn = calcVPNeq(m2, inp.tvpn);
     const viable = tir > inp.hurdle ? 'v' : tir > 0 ? 'm' : 'n';
     const vl     = tir > inp.hurdle ? 'VIABLE' : tir > 0 ? 'MARGINAL' : 'NO VIABLE';
@@ -948,7 +953,7 @@ update();
   function rTri(a,m,b,rng){ const u=rng(), fc=(m-a)/(b-a); return u<fc ? a+Math.sqrt(u*(b-a)*(m-a)) : b-Math.sqrt((1-u)*(b-a)*(b-m)); }
   function muestra(d,rng){ if(d.tipo==='pert'){ const al=1+4*(d.moda-d.min)/(d.max-d.min), be=1+4*(d.max-d.moda)/(d.max-d.min); return d.min+(d.max-d.min)*rBeta(al,be,rng); } return rTri(d.min,d.moda,d.max,rng); }
   function salidasDe(inp){ const prog=calcProg(inp), fin=calcFin(inp,prog), m=calcModel(inp,prog,fin), wf=calcWF(inp,m);
-    return { tir:Math.pow(m.MOIC,12/inp.dtotal)-1, vpn:calcVPNeq(m,inp.tvpn), tirLP:wf.tirLP, tirGP:wf.tirGP }; }
+    return { tir:Math.pow(m.MOIC,12/m.N)-1, vpn:calcVPNeq(m,inp.tvpn), tirLP:wf.tirLP, tirGP:wf.tirGP }; }
   const DRIVERS=[
     {key:'pv',label:'Precio de venta',unidad:'COP/m²',f:1,dec:0,lo:0.85,hi:1.15},
     {key:'csr',label:'Costo construcción (sobre rasante)',unidad:'COP/m²',f:1,dec:0,lo:0.90,hi:1.15},
@@ -977,8 +982,10 @@ update();
     }).join('');
   }
   function pctil(sorted,p){ const n=sorted.length; if(!n)return NaN; const idx=(p/100)*(n-1),lo=Math.floor(idx),fr=idx-lo; return lo>=n-1?sorted[n-1]:sorted[lo]+(sorted[lo+1]-sorted[lo])*fr; }
-  function rank(a){ const idx=a.map(function(v,i){return i;}).sort(function(x,y){return a[x]-a[y];}); const r=new Array(a.length); for(let k=0;k<idx.length;k++) r[idx[k]]=k; return r; }
-  function spearman(x,y){ const n=x.length; const rx=rank(Array.from(x)), ry=rank(Array.from(y)); const mu=(n-1)/2; let sxy=0,sxx=0,syy=0; for(let i=0;i<n;i++){ const a=rx[i]-mu,b=ry[i]-mu; sxy+=a*b; sxx+=a*a; syy+=b*b; } return (sxx>0&&syy>0)?sxy/Math.sqrt(sxx*syy):0; }
+  // Rangos promedio en empates (un driver redondeado a meses enteros empata casi siempre).
+  function rank(a){ const n=a.length; const idx=Array.from(a,function(v,i){return i;}).sort(function(x,y){return a[x]-a[y];}); const r=new Array(n); let k=0; while(k<n){ let e=k; while(e+1<n && a[idx[e+1]]===a[idx[k]]) e++; const pr=(k+e)/2; for(let t=k;t<=e;t++) r[idx[t]]=pr; k=e+1; } return r; }
+  // Devuelve null si alguna de las dos series no varía: la correlación no está definida.
+  function spearman(x,y){ const n=x.length; const rx=rank(Array.from(x)), ry=rank(Array.from(y)); const mu=(n-1)/2; let sxy=0,sxx=0,syy=0; for(let i=0;i<n;i++){ const a=rx[i]-mu,b=ry[i]-mu; sxy+=a*b; sxx+=a*a; syy+=b*b; } return (sxx>0&&syy>0)?sxy/Math.sqrt(sxx*syy):null; }
   function histCanvas(id, data, hurdle){
     const c=document.getElementById(id); if(!c)return; const ctx=c.getContext('2d'); const W=c.width=c.clientWidth||760, H=c.height=240;
     ctx.clearRect(0,0,W,H);
@@ -996,9 +1003,12 @@ update();
     const inp0=getInp();
     const act=[];
     document.querySelectorAll('.mc-on').forEach(function(cb){ if(cb.checked){ const i=+cb.dataset.i, d=DRIVERS[i];
-      act.push({ key:d.key, label:d.label, entero:!!d.entero, tipo:q('.mc-dist[data-i="'+i+'"]').value,
+      act.push({ key:d.key, label:d.label, f:d.f, entero:!!d.entero, tipo:q('.mc-dist[data-i="'+i+'"]').value,
         min:parseFloat(q('.mc-min[data-i="'+i+'"]').value)/d.f, moda:parseFloat(q('.mc-mo[data-i="'+i+'"]').value)/d.f, max:parseFloat(q('.mc-mx[data-i="'+i+'"]').value)/d.f }); } });
     if(!act.length){ err.textContent='Marca al menos una variable para variar (casilla «Variar»).'; return; }
+    for(const a of act){ const sl=document.getElementById(a.key), lo=sl?parseFloat(sl.min)/a.f:-Infinity, hi=sl?parseFloat(sl.max)/a.f:Infinity;
+      if(!(a.min>=0)){ err.textContent='En «'+a.label+'»: el mínimo no puede ser negativo.'; return; }
+      if(a.entero && !(a.min>=lo && a.max<=hi)){ err.textContent='En «'+a.label+'»: el rango debe estar entre '+(lo*a.f)+' y '+(hi*a.f)+', como el control del modelo.'; return; } }
     for(const a of act){ if(!(a.min<=a.moda && a.moda<=a.max && a.min<a.max)){ err.textContent='En «'+a.label+'»: se requiere mínimo ≤ más probable ≤ máximo (y mínimo < máximo).'; return; } }
     const N=Math.round(parseFloat(document.getElementById('mc-iter').value))||5000;
     const st=(document.getElementById('mc-seed').value||'').trim();
@@ -1019,8 +1029,8 @@ update();
       let pOverH=0; for(let i=0;i<tir.length;i++) if(isFinite(tir[i])&&tir[i]>=hurdle) pOverH++; pOverH/=tir.length;
       let pVpnPos=0; for(let i=0;i<vpn.length;i++) if(isFinite(vpn[i])&&vpn[i]>0) pVpnPos++; pVpnPos/=vpn.length;
       // tornado
-      const torn=act.map(function(a,j){ return {label:a.label, r:spearman(drv[j], tir)}; }).sort(function(x,y){return Math.abs(y.r)-Math.abs(x.r);});
-      const sAbs=torn.reduce(function(s,x){return s+Math.abs(x.r);},0)||1;
+      const torn=act.map(function(a,j){ return {label:a.label, r:spearman(drv[j], tir)}; }).sort(function(x,y){return Math.abs(y.r||0)-Math.abs(x.r||0);});
+      const sAbs=torn.reduce(function(s,x){return s+Math.abs(x.r||0);},0)||1;
       function kpi(l,v,s){ return '<div class="kpi"><div class="kl">'+l+'</div><div class="kv blue">'+v+'</div><div class="ks">'+(s||'')+'</div></div>'; }
       let html='<div class="kpi-row">'+
         kpi('TIR media', fP(media(tS)*100), 'sobre equity · anual')+
@@ -1037,7 +1047,8 @@ update();
       html+='<div style="font-size:11px;color:var(--text-muted);margin:.7rem 0 .2rem">Distribución de la TIR ('+N.toLocaleString('es')+' iteraciones · '+nOK+' válidas). Línea roja = hurdle.</div>';
       html+='<canvas id="mc-hist" style="width:100%;height:240px;background:var(--surface-0);border-radius:8px;border:.5px solid var(--border)"></canvas>';
       html+='<div style="font-size:11px;color:var(--text-muted);margin:.8rem 0 .3rem">Sensibilidad (tornado) — qué variable mueve más la TIR:</div>';
-      html+='<div>'+torn.map(function(x){ const p=Math.abs(x.r)/sAbs; const w=Math.round(Math.abs(x.r)*100);
+      html+='<div>'+torn.map(function(x){ if(x.r===null) return '<div style="display:flex;align-items:center;gap:8px;margin:2px 0;font-size:11px"><div style="width:190px;text-align:right;color:var(--text-secondary)">'+x.label+'</div><div style="flex:1;color:var(--text-muted)">sin variación en la muestra: no se puede medir su efecto</div></div>';
+        const p=Math.abs(x.r)/sAbs; const w=Math.round(Math.abs(x.r)*100);
         return '<div style="display:flex;align-items:center;gap:8px;margin:2px 0;font-size:11px"><div style="width:190px;text-align:right;color:var(--text-secondary)">'+x.label+'</div><div style="flex:1;background:var(--surface-0);border-radius:4px;overflow:hidden"><div style="height:14px;width:'+w+'%;background:'+(x.r>=0?'#2a78d6':'#e34948')+'"></div></div><div style="width:96px">r='+x.r.toFixed(2)+' · '+fP(p*100)+'</div></div>'; }).join('')+'</div>';
       document.getElementById('mc-salida').innerHTML=html;
       histCanvas('mc-hist', tS, hurdle);

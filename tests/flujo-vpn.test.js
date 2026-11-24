@@ -11,20 +11,21 @@ test('el flujo neto suma exactamente la utilidad neta (ni deuda fantasma ni inte
   let n = 0;
   for (const curva of ['s', 'rapida', 'lenta', 'lineal']) {
     M.setCurva(curva);
-    for (const [dtotal, dprev, dobra] of [[12, 3, 6], [30, 4, 18], [24, 0, 20], [60, 12, 36]])
+    for (const [dtotal, dprev, dobra] of [[12, 3, 6], [30, 4, 18], [24, 0, 20], [60, 12, 36], [12, 0, 18], [12, 6, 6], [24, 12, 48]])
     for (const retraso of [0, 3, 8])
     for (const peq of [0.40, 0.65, 0.90])
     for (const tramos of [3, 10, 20])
     for (const rpico of [0.03, 0.08, 0.20]) {
-      const { m } = correr(M, inpBase({ dtotal, dprev, dobra, retraso, peq, tramos, rpico }));
+      const { m, fin } = correr(M, inpBase({ dtotal, dprev, dobra, retraso, peq, tramos, rpico }));
       const ctx = JSON.stringify({ curva, dtotal, dprev, dobra, retraso, peq, tramos, rpico });
       assert.ok(Math.abs(suma(m.flujoNeto) - m.uN) < 1, ctx);
+      assert.ok(Math.abs(m.ingTot - fin.ingT * m.vAcum) < 1, 'todo lo vendido se cobra: ' + ctx);
       assert.ok(Math.abs(suma(m.pagoCred) - (m.montoDesemb + m.totalInt)) < 1, 'se paga principal + intereses, una sola vez: ' + ctx);
       n++;
     }
   }
   M.setCurva('rapida');
-  assert.ok(n > 1000);
+  assert.ok(n > 2000);
 });
 
 test('los desembolsos entran al flujo y los intereses no se restan mes a mes', () => {
@@ -88,4 +89,31 @@ test('ritmo pico: es el máximo mensual de ventas y cambia el resultado', () => 
 
 test('sensibilidad: las filas de ritmo recalculan el modelo con otro ritmo pico', () => {
   assert.match(M.html, /rpico: inp\.rpico \* \(1 \+ r\)/);
+});
+
+test('si la duración total no incluye la entrega, el modelo se extiende hasta ese mes y lo señala', () => {
+  // Hallazgo de auditoría: horizonte 12, preventa 0, obra 18 → la entrega es en el mes 19.
+  const inp = inpRepro({ dprev: 0, dobra: 18, retraso: 0, peq: 0.40, rpico: 0.20, tramos: 20 });
+  const { m, fin } = correr(M, inp);
+  assert.equal(m.N, 19);
+  assert.equal(m.horizonteExt, true);
+  assert.equal(m.mesPago + 1, 19);
+  assert.equal(m.flujoNeto.length, 19);
+  assert.ok(Math.abs(suma(m.flujoNeto) - m.uN) < 1, 'caja = utilidad');
+  assert.ok(Math.abs(m.ingTot - fin.ingT * m.vAcum) < 1, 'recaudo completo');
+  assert.ok(m.ingSal[18] > 0 && m.pagoCred[18] > 0, 'saldo de compradores y pago del crédito en el mes de la entrega');
+  // cronograma que sí cabe: no se toca
+  const b = correr(M, inpBase()).m;
+  assert.equal(b.N, 30); assert.equal(b.horizonteExt, false);
+  assert.match(M.html, /if \(m\.horizonteExt\) al\.push/);
+});
+
+test('el panel informa el pago real del crédito, no el saldo del último mes de obra', () => {
+  M.setCurva('lineal');
+  const { m } = correr(M, inpRepro({ dprev: 0, dobra: 6, retraso: 0, peq: 0.40, rpico: 0.20, tramos: 3 }));
+  M.setCurva('rapida');
+  assert.ok(Math.abs(m.pagoTotal - (m.montoDesemb + m.totalInt)) < 1);
+  assert.ok(Math.abs(m.pagoTotal - m.pagoCred[m.mesPago]) < 1);
+  assert.ok(m.pagoTotal - m.saldoFinal > 1e6, 'el saldo de cierre de obra omite el interés del mes de pago');
+  assert.match(M.html, /lbl:'Pago al cancelar crédito',\s*val:fM\(m\.pagoTotal\)/);
 });
