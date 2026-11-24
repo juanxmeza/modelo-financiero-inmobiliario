@@ -25,7 +25,7 @@ No hay control de «tramos»: el calendario de giros lo determina el avance de l
 ## Intereses y cancelación
 
 - Los intereses se pagan **cada mes** sobre el principal vigente, a `tasa anual / 12`. No se capitalizan.
-- El principal se cancela completo en el mes de la entrega (el siguiente al último mes de obra), con el saldo de los compradores. Ese mes también paga su interés.
+- El principal se cancela completo en el mes de la entrega (el siguiente al último mes de obra), junto con el interés de ese mes. La fuente prevista es el saldo de los compradores; si no alcanza, `faltaPago` cuantifica la diferencia y la interfaz lo avisa en el panel y en una alerta. El flujo registra el pago completo en cualquier caso.
 
 ## Supuestos decididos por Juan (pendientes de contrastar con un contrato real)
 

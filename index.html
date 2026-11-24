@@ -253,7 +253,7 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
     <div class="kpi"><div class="kl">VPN</div><div class="kv blue" id="k-vpn">—</div><div class="ks" id="k-vpns">—</div></div>
     <div class="kpi" style="border-color:#0284c7"><div class="kl" style="color:#0369a1">Crédito constructor</div><div class="kv sky" id="k-cred">—</div><div class="ks" id="k-cred-sub">—</div></div>
     <div class="kpi" style="border-color:#e34948"><div class="kl" style="color:#a32d2d">Pico equity requerido</div><div class="kv red" id="k-pico">—</div><div class="ks" id="k-pico-mes">—</div></div>
-    <div class="kpi"><div class="kl">Payback</div><div class="kv amber" id="k-pb">—</div><div class="ks">flujo acum. positivo</div></div>
+    <div class="kpi"><div class="kl">Payback</div><div class="kv amber" id="k-pb">—</div><div class="ks">flujo acum. positivo y sostenido</div></div>
   </div>
 
   <div class="credito-panel">
@@ -619,36 +619,72 @@ function calcModel(inp, prog, fin) {
   const picoEq    = Math.max(...equityReq, 0);
   const mesPico   = equityReq.indexOf(picoEq) + 1;
 
-  let payback = null;
-  for (let i = 0; i < flujoAcum.length; i++) { if (flujoAcum[i] >= 0 && !payback) payback = i + 1; }
-
   const MOIC    = picoEq > 0 ? (picoEq + uN) / picoEq : 1;
-  const tir     = calcTIR(flujoNeto);                    // tasa interna del flujo mensual, anualizada
+  const tirInfo = calcTIRinfo(flujoNeto);                // tasa interna del flujo mensual, anualizada
+  const tir     = tirInfo.tir;
+  // Recuperación sostenida: primer mes desde el cual el flujo acumulado ya no vuelve a ser negativo.
+  let payback = null;
+  for (let i = flujoAcum.length - 1; i >= 0 && flujoAcum[i] >= 0; i--) payback = i + 1;
+  // Fuente de pago del crédito en la entrega: saldo de compradores frente al servicio de ese mes.
+  const faltaPago = Math.max(0, pagoCred[mesPago] - ingSal[mesPago]);
+  let acPv = 0; const prevAcum = ingPreventaMes.map(v => { acPv += v; return acPv; });
 
   return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, ingTotalMes, egMes, flujoNeto,
     flujoAcum, egAcum, ingAcum, egOper, pagoCred, impMes, gCV, gAV, mesPago, desemb, desAcum, saldoCred, intMes, equityReq,
     picoEq, mesPico, montoCred, montoDesemb, giroApertura, credEstado, mesUmbral, mesAp,
     prevObra, totalInt, horizonteExt, payback, vAcum,
-    N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC, tir };
+    N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC, tir, tirEstado: tirInfo.estado, tirRaices: tirInfo.raices, faltaPago, prevAcum };
 }
 
 function calcVPN(cf, r) { return cf.reduce((a,v,t) => a + v / Math.pow(1 + r/12, t), 0); }
 // TIR anual del flujo mensual del inversionista: tasa mensual que anula el valor presente, anualizada.
-// Se busca la raíz más cercana a cero partiendo de la tasa 0 (donde el valor presente es la utilidad
-// neta): hacia arriba si el proyecto gana, hacia abajo si pierde. Así el impuesto del último mes
-// (un egreso final) no produce raíces espurias. Devuelve −1 (−100 %) si no se recupera nada.
-function calcTIR(cf) {
-  const vp = r => cf.reduce((a,v,t) => a + v / Math.pow(1 + r, t + 1), 0);
-  if (!cf.some(v => v > 0)) return -1;
-  const v0 = vp(0);
-  if (Math.abs(v0) < 1e-6) return 0;
-  const paso = v0 > 0 ? 0.0025 : -0.0025, lim = v0 > 0 ? 1 : -0.5;
-  let a = 0, b = paso;
-  while (Math.abs(b) <= Math.abs(lim) && vp(b) * v0 > 0) { a = b; b += paso; }
-  if (Math.abs(b) > Math.abs(lim)) return v0 > 0 ? Math.pow(1 + lim, 12) - 1 : -1;
-  for (let k = 0; k < 60; k++) { const mid = (a + b) / 2; if (vp(mid) * v0 > 0) a = mid; else b = mid; }
-  return Math.pow(1 + (a + b) / 2, 12) - 1;
+// Devuelve { tir, estado, raices }:
+//   'ok'               una sola tasa anula el valor presente.
+//   'multiple'         hay más de una tasa positiva que anula el valor presente (o alguna, en un
+//                      proyecto con pérdida); se informa la menor y se avisa: decide el VPN.
+//   'sin_recuperacion' el flujo no tiene ningún ingreso neto: −100 %.
+//   'sin_inversion'    el flujo no tiene ningún mes negativo: la TIR no está definida (tir = null).
+//   'sin_raiz'         ninguna tasa entre −99,9 % y +900 % mensual anula el valor presente (tir = null).
+// Se recorre una malla de (1 + tasa) y se afina cada cambio de signo por bisección; un resultado solo
+// se informa si anula el valor presente. No se detectan raíces tangentes (sin cambio de signo) ni
+// pares de raíces más cercanos entre sí que el paso de la malla.
+function calcTIRinfo(cf) {
+  if (!cf.some(v => v > 0)) return { tir: -1, estado: 'sin_recuperacion', raices: 0 };
+  if (!cf.some(v => v < 0)) return { tir: null, estado: 'sin_inversion', raices: 0 };
+  const n = cf.length;
+  const vp = x => { const y = 1 / x; let a = 0; for (let t = n - 1; t >= 0; t--) a = (a + cf[t]) * y; return a; };   // x = 1 + tasa mensual
+  // Malla: fina (0,05 puntos mensuales) entre −30 % y +50 % mensual, donde caen los proyectos reales;
+  // geométrica en los extremos. El desfase evita evaluar justo sobre tasas «redondas».
+  const xs = [];
+  for (let k = 0; k < 700; k++) xs.push(0.001 * Math.pow(700, k / 700));
+  for (let x = 0.70013; x < 1.5; x += 0.0005) xs.push(x);
+  for (let k = 0; k <= 400; k++) xs.push(1.5 * Math.pow(10 / 1.5, k / 400));
+  const raices = [];
+  let xa = xs[0], fa = vp(xa);
+  for (let k = 1; k < xs.length; k++) {
+    const xb = xs[k], fb = vp(xb);
+    if (fa * fb < 0) { let a = xa, b = xb; for (let i = 0; i < 70; i++) { const mid = (a + b) / 2; if (vp(mid) * fa > 0) a = mid; else b = mid; } raices.push((a + b) / 2); }
+    else if (fa === 0) raices.push(xa);
+    xa = xb; fa = fb;
+  }
+  if (fa === 0) raices.push(xa);
+  // Qué raíz importa: las tasas de descuento reales son ≥ 0. Con utilidad positiva, la TIR es la
+  // primera tasa positiva donde el valor presente se vuelve negativo; raíces a tasas negativas (las
+  // crea el impuesto del último mes) no cambian ninguna decisión. Hay ambigüedad real cuando existe
+  // más de una raíz positiva, o cuando un proyecto con pérdida tiene alguna.
+  const pos = raices.filter(x => x > 1), neg = raices.filter(x => x <= 1);
+  const an = x => Math.pow(x, 12) - 1;
+  if (vp(1) >= 0) {
+    if (!pos.length) return { tir: null, estado: 'sin_raiz', raices: 0 };
+    return { tir: an(Math.min(...pos)), estado: pos.length > 1 ? 'multiple' : 'ok', raices: pos.length };
+  }
+  if (pos.length) return { tir: an(Math.min(...pos)), estado: 'multiple', raices: pos.length };
+  if (!neg.length) return { tir: null, estado: 'sin_raiz', raices: 0 };
+  return { tir: an(Math.max(...neg)), estado: 'ok', raices: 1 };
 }
+function calcTIR(cf) { return calcTIRinfo(cf).tir; }
+// Texto de una TIR que puede no estar definida.
+function fTir(t) { return t === null || !isFinite(t) ? 'n/d' : fP(t * 100); }
 // VPN del flujo del inversionista; cada mes se descuenta a fin de mes (mes 1 → t = 1).
 function calcVPNeq(m, r) { return calcVPN([0, ...m.flujoNeto], r); }
 
@@ -681,7 +717,7 @@ function renderChartFin(m) {
   charts['fin'] = new Chart(ctx, { type:'bar', data:{ labels:labs, datasets:[
     { label:'Equity', data:scaleArr(m.equityReq), backgroundColor:m.equityReq.map((_,i)=>i===picoIdx?'rgba(227,73,72,0.85)':'rgba(42,120,214,0.55)'), order:3, yAxisID:'y' },
     { label:'Crédito', data:scaleArr(m.desAcum), type:'line', borderColor:'#0ea5e9', borderWidth:2, pointRadius:0, fill:false, order:2, yAxisID:'y' },
-    { label:'Preventa', data:scaleArr(m.ingAcum), type:'line', borderColor:'#1baf7a', borderWidth:2, pointRadius:0, borderDash:[4,3], fill:false, order:1, yAxisID:'y' }
+    { label:'Preventa', data:scaleArr(m.prevAcum), type:'line', borderColor:'#1baf7a', borderWidth:2, pointRadius:0, borderDash:[4,3], fill:false, order:1, yAxisID:'y' }
   ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
     scales:{x:{ticks:{font:{size:9},autoSkip:true,maxTicksLimit:15}}, y:{ticks:{font:{size:9},callback:v=>chartLabel(v)}}}}});
 }
@@ -743,12 +779,12 @@ function renderCredPanel(inp, prog, fin, m) {
     {cls:'cc-eq',  lbl:'Equity pico requerido',     val:fM(m.picoEq),    sub:'Mes '+m.mesPico+' · '+fP(pctCosto)+' del costo total'},
     {cls:'cc-cred',lbl:'Crédito desembolsado',       val:fM(m.montoDesemb), sub:'Cupo teórico '+fM(m.montoCred)+' · '+fP(inp.pfinc*100)+' del costo directo'},
     {cls:'cc-int', lbl:'Intereses totales',           val:fM(m.totalInt),  sub:'Tasa '+fP(inp.tcred*100)+' anual · se pagan cada mes'},
-    {cls:'cc-sal', lbl:'Principal a cancelar',       val:fM(m.montoDesemb), sub:m.montoDesemb > 0 ? 'En la entrega, mes '+(m.mesPago+1)+' · con saldo de compradores' : 'Sin crédito que cancelar'}
+    {cls:'cc-sal', lbl:'Principal a cancelar',       val:fM(m.montoDesemb), sub:m.montoDesemb > 0 ? 'En la entrega, mes '+(m.mesPago+1)+(m.faltaPago > 1 ? ' · el saldo de compradores no alcanza: faltan '+fM(m.faltaPago) : ' · cubierto por el saldo de compradores') : 'Sin crédito que cancelar'}
   ].map(c=>`<div class="cc ${c.cls}"><div class="cc-label">${c.lbl}</div><div class="cc-val">${c.val}</div><div class="cc-sub">${c.sub}</div></div>`).join('');
 
   const abre = credAbre(m) ? 'Mes '+(m.mesAp+1) : 'No abre';
   document.getElementById('phase-ind').innerHTML = [
-    {n:'Mes 1',             l:'Compra terreno + inicio preventa'},
+    {n:'Mes 1',             l:'Compra del terreno'},
     {n:abre,                l:'Apertura crédito constructor (PEQ)'},
     {n:'Mes '+(m.mesPago+1), l:m.montoDesemb > 0 ? 'Entrega · saldo compradores · cancela crédito' : 'Entrega · saldo compradores'},
     {n:m.payback?'Mes '+m.payback:'—', l:'Payback equity inversionistas'}
@@ -763,7 +799,7 @@ function renderKPIs(inp, m) {
   document.getElementById('k-util').textContent = fM(m.uN);
   document.getElementById('k-marg').textContent = 'Margen neto: ' + fP(m.mN*100);
   const tir = m.tir;
-  document.getElementById('k-tir').textContent  = fP(tir*100);
+  document.getElementById('k-tir').textContent  = fTir(tir);
   document.getElementById('k-vpn').textContent  = fM(calcVPNeq(m, inp.tvpn));
   document.getElementById('k-vpns').textContent = '@ ' + fP(inp.tvpn*100);
   document.getElementById('k-cred').textContent = fM(m.montoDesemb);
@@ -795,14 +831,19 @@ function renderAlerts(inp, m, fin) {
   const al = [];
   if (m.horizonteExt) al.push({t:'amber', m:`La duración total indicada (${inp.dtotal} meses) no alcanza a incluir la entrega: preventa (${inp.dprev}) + obra (${inp.dobra}) terminan en el mes ${m.finObra} y la entrega es en el mes ${m.finObra+1}. El modelo se calcula a ${m.N} meses.`, f:'Aumenta la duración total o reduce preventa u obra.'});
   if (!credAbre(m)) al.push({t:'red',   m:credMotivo(inp, m), f:credFuentes(m)});
-  if (tir < 0)           al.push({t:'red',   m:`TIR negativa (${fP(tir*100)}). El proyecto destruye valor incluyendo el costo de la deuda.`, f:'Ajusta precios o reduce costos directos.'});
-  else if (tir < inp.hurdle) al.push({t:'amber', m:`TIR (${fP(tir*100)}) por debajo del hurdle LP (${fP(inp.hurdle*100)}).`, f:'El LP no alcanza su retorno preferido.'});
+  const wf = calcWF(inp, m);
+  if (tir === null)      al.push({t: m.uN < 0 ? 'red' : 'amber', m:'La TIR no está definida para este flujo: ' + (m.tirEstado === 'sin_inversion' ? 'no hay ningún mes con aporte neto.' : m.uN < 0 ? 'el valor presente es negativo a cualquier tasa; el proyecto pierde.' : 'ninguna tasa anula el valor presente.'), f:'Usa el VPN para decidir.'});
+  else if (tir < 0)      al.push({t:'red',   m:`TIR negativa (${fTir(tir)}). El proyecto destruye valor incluyendo el costo de la deuda.`, f:'Ajusta precios o reduce costos directos.'});
+  else if (tir < inp.hurdle) al.push({t:'amber', m:`La TIR del proyecto (${fTir(tir)}) está por debajo de la meta de ${fP(inp.hurdle*100)} (hurdle).`, f:''});
+  if (m.tirEstado === 'multiple') al.push({t:'amber', m:`El flujo cambia de signo más de una vez y ${m.tirRaices > 1 ? 'admite '+m.tirRaices+' tasas internas positivas; se muestra la menor' : 'tiene una tasa interna positiva pese a cerrar con pérdida'}.`, f:'Con flujos así la TIR no es concluyente: decide con el VPN.'});
+  if (wf.lpC > 0 && wf.pLP < wf.hAmt - 1) al.push({t:'amber', m:`El reparto no alcanza a pagar completo el retorno preferido del LP: recibe ${fM(wf.pLP)} de ${fM(wf.hAmt)}.`, f:'El retorno preferido se calcula compuesto sobre todo el horizonte; no depende de la TIR del proyecto.'});
+  if (m.faltaPago > 1)   al.push({t:'red',   m:`En la entrega (mes ${m.mesPago+1}) el saldo de compradores (${fM(m.ingSal[m.mesPago])}) no alcanza para el servicio del crédito de ese mes (${fM(m.pagoCred[m.mesPago])}): faltan ${fM(m.faltaPago)}.`, f:'La diferencia debe cubrirse con otra caja o con aportes.'});
   if (m.totalInt > fin.cC * 0.15) al.push({t:'amber', m:`Intereses del crédito constructor (${fM(m.totalInt)}) superan el 15% del costo directo.`, f:'Negocia mejor tasa o reduce el plazo de obra.'});
   if (m.vAcum < 0.999)  al.push({t:'amber', m:`Al final del horizonte queda sin vender el ${fP((1-m.vAcum)*100)} de las unidades. El modelo no les asigna ningún valor: no generan ingreso.`, f:'Sube el ritmo de ventas o amplía la duración del proyecto.'});
   if (m.vAcum < 0.80)   al.push({t:'amber', m:`Absorción proyectada ${fP(m.vAcum*100)} de unidades. Riesgo de no alcanzar PEQ.`, f:'Ajusta la curva de absorción o la velocidad de ventas.'});
   if (inp.salPct > 0.70) al.push({t:'amber', m:`Saldo a la entrega es ${fP(inp.salPct*100)}% del precio. Alta dependencia del crédito hipotecario del comprador.`, f:''});
-  if (!m.payback)        al.push({t:'red',   m:'El flujo acumulado no cruza a positivo en el horizonte del proyecto.', f:''});
-  if (tir > inp.hurdle + 0.10) al.push({t:'green', m:`TIR (${fP(tir*100)}) supera el hurdle en más de 10 pp con costo de deuda incluido. Proyecto en zona sólida.`, f:''});
+  if (!m.payback)        al.push({t:'red',   m:'El flujo acumulado no termina en positivo dentro del horizonte del proyecto.', f:''});
+  if (tir !== null && tir > inp.hurdle + 0.10) al.push({t:'green', m:`La TIR del proyecto (${fTir(tir)}) supera la meta (hurdle) en más de 10 pp, con costo de deuda incluido` + (wf.pLP >= wf.hAmt - 1 ? ', y el retorno preferido del LP queda cubierto.' : '.'), f:''});
   document.getElementById('alerts-area').innerHTML = al.map(a =>
     `<div class="al al-${a.t}"><div class="al-icon">${a.t==='red'?'✕':a.t==='amber'?'⚠':'✓'}</div><div>${a.m}${a.f?` <em style="opacity:.8">${a.f}</em>`:''}</div></div>`
   ).join('');
@@ -855,6 +896,7 @@ function renderWF(inp, m) {
     {l:`Upside GP (${Math.round(inp.gpsplit*100)}%)`,     v:wf.uGP, c:'#eda100'}
   ];
   document.getElementById('wf-content').innerHTML =
+    `<div style="font-size:10px;color:var(--text-muted);margin-bottom:.5rem">Las rentabilidades de LP y GP son la anualización del múltiplo a ${m.N} meses (múltiplo^(12/${m.N}) − 1). No son una TIR: no reconocen en qué mes entra y sale el dinero, y no se comparan con la TIR del inversionista.</div>` +
     `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.75rem">` +
     [['Capital LP aportado',      fM(wf.lpC)],  ['Capital GP aportado',   fM(wf.gpC)],
      ['Hurdle LP (retorno pref.)',fM(wf.hAmt)], ['Disponible a distribuir',fM(wf.disp)],
@@ -879,8 +921,8 @@ function renderSens(inp, prog) {
       const f2 = calcFin(inp, prog, 1+p);
       const m2 = calcModel(Object.assign({}, inp, { rpico: inp.rpico * (1 + r) }), prog, f2);
       const tir = m2.tir;
-      const c = tir > inp.hurdle ? 'sg2' : tir > 0 ? 'sm2' : 'sb2';
-      h += `<td><span class="sc-cell ${c}">${fP(tir*100)}</span></td>`;
+      const c = tir === null ? (m2.uN < 0 ? 'sb2' : 'sm2') : tir > inp.hurdle ? 'sg2' : tir > 0 ? 'sm2' : 'sb2';
+      h += `<td><span class="sc-cell ${c}">${fTir(tir)}</span></td>`;
     });
     h += '</tr>';
   });
@@ -896,18 +938,19 @@ function renderScen(inp, prog, m) {
     const wf2 = calcWF(inp, m2);
     const tir = m2.tir;
     const vpn = calcVPNeq(m2, inp.tvpn);
-    const viable = tir > inp.hurdle ? 'v' : tir > 0 ? 'm' : 'n';
-    const vl     = tir > inp.hurdle ? 'VIABLE' : tir > 0 ? 'MARGINAL' : 'NO VIABLE';
+    // Criterio de la etiqueta: TIR del proyecto frente a la meta (hurdle). No evalúa el reparto LP/GP.
+    const viable = tir === null ? (m2.uN < 0 ? 'n' : 'm') : tir > inp.hurdle ? 'v' : tir > 0 ? 'm' : 'n';
+    const vl     = tir === null ? 'TIR NO DEFINIDA' : tir > inp.hurdle ? 'TIR SOBRE LA META' : tir > 0 ? 'TIR BAJO LA META' : 'TIR NEGATIVA';
     h += `<div class="sc ${s.cl}"><div class="sc-title">${s.l}</div>
       ${sr('Precio/m²', fM(Math.round(inp.pv*s.pM)))}
       ${sr('Utilidad neta', fM(m2.uN))}
-      ${sr('TIR inversionista', fP(tir*100))}
+      ${sr('TIR inversionista', fTir(tir))}
       ${sr('VPN', fM(vpn))}
       ${sr('Crédito desembolsado', fM(m2.montoDesemb))}
       ${sr('Intereses', fM(m2.totalInt))}
       ${sr('Pico equity', fM(m2.picoEq))}
-      ${sr('Rentab. anual LP', fP(wf2.tirLP*100))}
-      ${sr('Rentab. anual GP', fP(wf2.tirGP*100))}
+      ${sr('Rentab. anual LP (múltiplo)', fP(wf2.tirLP*100))}
+      ${sr('Rentab. anual GP (múltiplo)', fP(wf2.tirGP*100))}
       ${sr('Crédito abre', credAbre(m2) ? 'Sí ✓ mes '+(m2.mesAp+1) : m2.credEstado === 'tardio' ? 'No ✗ PEQ tras obra' : 'No ✗ PEQ no alcanzado')}
       <span class="badge b${viable}">${vl}</span></div>`;
   });
@@ -985,7 +1028,7 @@ update();
     const inp=getInp();
     document.getElementById('mc-tbody').innerHTML = DRIVERS.map(function(d,i){
       const bd=inp[d.key]*d.f; let mn,mo,mx;
-      if(d.key==='retraso'){ mn=0; mo=Math.round(bd); mx=Math.round(bd)+3; }
+      if(d.key==='retraso'){ const tope=parseFloat(document.getElementById('retraso').max); mn=0; mo=Math.round(bd); mx=Math.min(mo+3,tope); }
       else { mn=+(bd*d.lo).toFixed(d.dec); mo=+bd.toFixed(d.dec); mx=+(bd*d.hi).toFixed(d.dec); }
       return '<tr style="border-bottom:.5px solid var(--border)">'+
         '<td style="text-align:center;padding:3px 6px"><input type="checkbox" class="mc-on" data-i="'+i+'"></td>'+
@@ -1037,7 +1080,7 @@ update();
       let nOK=0;
       for(let it=0; it<N; it++){ const inp=Object.assign({},inp0);
         for(let j=0;j<act.length;j++){ let v=muestra(act[j],rng); if(act[j].entero) v=Math.round(v); /* el modelo es mensual: un retraso fraccionario produce NaN */ inp[act[j].key]=v; drv[j][it]=v; }
-        const o=salidasDe(inp); tir[it]=o.tir; vpn[it]=o.vpn; tlp[it]=o.tirLP; tgp[it]=o.tirGP; if(isFinite(o.tir))nOK++;
+        const o=salidasDe(inp); tir[it]=(o.tir===null?NaN:o.tir); vpn[it]=o.vpn; tlp[it]=o.tirLP; tgp[it]=o.tirGP; if(isFinite(o.tir))nOK++;
       }
       const tS=Float64Array.from(tir).filter(isFinite).sort(), vS=Float64Array.from(vpn).filter(isFinite).sort();
       const media=function(a){let s=0;for(let i=0;i<a.length;i++)s+=a[i];return s/a.length;};
@@ -1045,7 +1088,9 @@ update();
       let pOverH=0; for(let i=0;i<tir.length;i++) if(isFinite(tir[i])&&tir[i]>=hurdle) pOverH++; pOverH/=tir.length;
       let pVpnPos=0; for(let i=0;i<vpn.length;i++) if(isFinite(vpn[i])&&vpn[i]>0) pVpnPos++; pVpnPos/=vpn.length;
       // tornado
-      const torn=act.map(function(a,j){ return {label:a.label, r:spearman(drv[j], tir)}; }).sort(function(x,y){return Math.abs(y.r||0)-Math.abs(x.r||0);});
+      const okI=[]; for(let i=0;i<N;i++) if(isFinite(tir[i])) okI.push(i);
+      const tirOK=okI.map(function(i){return tir[i];});
+      const torn=act.map(function(a,j){ return {label:a.label, r:spearman(okI.map(function(i){return drv[j][i];}), tirOK)}; }).sort(function(x,y){return Math.abs(y.r||0)-Math.abs(x.r||0);});
       const sAbs=torn.reduce(function(s,x){return s+Math.abs(x.r||0);},0)||1;
       function kpi(l,v,s){ return '<div class="kpi"><div class="kl">'+l+'</div><div class="kv blue">'+v+'</div><div class="ks">'+(s||'')+'</div></div>'; }
       let html='<div class="kpi-row">'+
@@ -1060,10 +1105,10 @@ update();
         kpi('VPN P50', fM(pctil(vS,50)),'mediana')+
         '<div class="kpi" style="border-color:'+(pVpnPos>=0.75?'#1baf7a':'#eda100')+'"><div class="kl">P( VPN &gt; 0 )</div><div class="kv" style="color:'+(pVpnPos>=0.75?'#1baf7a':'#c98a00')+'">'+fP(pVpnPos*100)+'</div><div class="ks">crea valor</div></div>'+
         '</div>';
-      html+='<div style="font-size:11px;color:var(--text-muted);margin:.7rem 0 .2rem">Distribución de la TIR ('+N.toLocaleString('es')+' iteraciones · '+nOK+' válidas). Línea roja = hurdle.</div>';
+      html+='<div style="font-size:11px;color:var(--text-muted);margin:.7rem 0 .2rem">Distribución de la TIR ('+N.toLocaleString('es')+' iteraciones · '+nOK+' con TIR definida). Línea roja = hurdle.</div>';
       html+='<canvas id="mc-hist" style="width:100%;height:240px;background:var(--surface-0);border-radius:8px;border:.5px solid var(--border)"></canvas>';
       html+='<div style="font-size:11px;color:var(--text-muted);margin:.8rem 0 .3rem">Sensibilidad (tornado) — qué variable mueve más la TIR:</div>';
-      html+='<div>'+torn.map(function(x){ if(x.r===null) return '<div style="display:flex;align-items:center;gap:8px;margin:2px 0;font-size:11px"><div style="width:190px;text-align:right;color:var(--text-secondary)">'+x.label+'</div><div style="flex:1;color:var(--text-muted)">sin variación en la muestra: no se puede medir su efecto</div></div>';
+      html+='<div>'+torn.map(function(x){ if(x.r===null) return '<div style="display:flex;align-items:center;gap:8px;margin:2px 0;font-size:11px"><div style="width:190px;text-align:right;color:var(--text-secondary)">'+x.label+'</div><div style="flex:1;color:var(--text-muted)">sin variación de la variable o de la TIR en la muestra: no se puede medir su efecto</div></div>';
         const p=Math.abs(x.r)/sAbs; const w=Math.round(Math.abs(x.r)*100);
         return '<div style="display:flex;align-items:center;gap:8px;margin:2px 0;font-size:11px"><div style="width:190px;text-align:right;color:var(--text-secondary)">'+x.label+'</div><div style="flex:1;background:var(--surface-0);border-radius:4px;overflow:hidden"><div style="height:14px;width:'+w+'%;background:'+(x.r>=0?'#2a78d6':'#e34948')+'"></div></div><div style="width:96px">r='+x.r.toFixed(2)+' · '+fP(p*100)+'</div></div>'; }).join('')+'</div>';
       document.getElementById('mc-salida').innerHTML=html;
