@@ -3,3 +3,4 @@
 exclude:
   - ARQUITECTURA.md
   - docs/
+  - tests/
