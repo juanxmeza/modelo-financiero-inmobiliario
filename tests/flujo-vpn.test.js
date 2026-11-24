@@ -28,7 +28,7 @@ test('el flujo neto suma exactamente la utilidad neta (ni deuda fantasma ni inte
 });
 
 test('los desembolsos entran al flujo y los intereses no se restan mes a mes', () => {
-  const { m } = correr(M, inpRepro({ retraso: 0, peq: 0.40 }));
+  const { m } = correr(M, inpRepro({ retraso: 0, rpico: 0.20, peq: 0.40 }));
   for (const mes of [7, 8, 9]) {
     const i = mes - 1;
     assert.ok(m.desemb[i] > 0 && m.intMes[i] > 0);
@@ -50,10 +50,9 @@ test('VPN: a tasa 0 % es la utilidad neta; no se antepone el pico de equity', ()
 });
 
 test('estado de resultados: gastos comerciales y administrativos solo sobre lo vendido', () => {
-  const inp = inpRepro({ retraso: 8 });
-  const { m, fin } = correr(M, inp);
-  assert.ok(Math.abs(m.vAcum - 0.5) < 1e-9);
-  assert.ok(Math.abs(m.gCV - fin.gC * 0.5) < 1 && Math.abs(m.gAV - fin.gA * 0.5) < 1);
+  const { m, fin } = correr(M, inpBase());   // ritmo 8 %: no se vende todo
+  assert.ok(m.vAcum > 0.5 && m.vAcum < 0.9);
+  assert.ok(Math.abs(m.gCV - fin.gC * m.vAcum) < 1 && Math.abs(m.gAV - fin.gA * m.vAcum) < 1);
 });
 
 test('recaudo: lo vendido se cobra completo (separación + cuota inicial + saldo), sin perder la cuota inicial', () => {
@@ -75,4 +74,18 @@ test('recaudo: ninguna unidad paga antes de venderse', () => {
     cobrado += m.ingTotalMes[i]; vendido += m.unidMes[i];
     assert.ok(cobrado <= m.ingTot / m.vAcum * vendido + 1, 'mes ' + (i + 1));
   }
+});
+
+test('ritmo pico: es el máximo mensual de ventas y cambia el resultado', () => {
+  const venta = rp => correr(M, inpBase({ rpico: rp })).m;
+  const a = venta(0.04), b = venta(0.08), c = venta(0.15);
+  assert.ok(Math.abs(Math.max(...b.unidMes) - 0.08) < 1e-9, 'el mes pico vende exactamente el ritmo pico');
+  assert.ok(a.vAcum < b.vAcum && b.vAcum < c.vAcum, 'más ritmo, más unidades vendidas en el horizonte');
+  assert.ok(Math.abs(c.vAcum - 1) < 1e-9, 'nunca se vende más del 100 %');
+  assert.ok(a.uN < b.uN && b.uN < c.uN);
+  for (const m of [a, b, c]) assert.ok(m.unidMes.every(u => u >= 0 && u <= 0.5));
+});
+
+test('sensibilidad: las filas de ritmo recalculan el modelo con otro ritmo pico', () => {
+  assert.match(M.html, /rpico: inp\.rpico \* \(1 \+ r\)/);
 });

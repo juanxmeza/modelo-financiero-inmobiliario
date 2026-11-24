@@ -29,24 +29,13 @@ function assertSinCredito({ m, prog, fin }, inp) {
   assert.ok(m.pagoCred.every(v => v === 0), 'pago del crédito');
 }
 
-test('retraso 6 meses, umbral 90 %: el umbral llega en el mes 12, después de la obra → sin desembolsos', () => {
-  const inp = inpRepro({ retraso: 6 }), r = correr(M, inp), m = r.m;
-  assert.equal(m.finObra, 9);
-  assert.equal(m.mesUmbral + 1, 12);
-  assert.equal(m.credEstado, 'tardio');
-  assertSinCredito(r, inp);
-});
+// Escenario base de las pruebas: Lanzamiento, 12 meses, 3 de preventa, 6 de obra (meses 4 a 9),
+// ritmo pico 20 % en el mes 4, umbral 40 %, 3 tramos. Ventas mensuales desde el inicio:
+// 5 %, 10 %, 15 %, 20 %, 20 %, 16,4 %… (acumulado 5, 15, 30, 50, 70, 86,4…).
+const esc = over => inpRepro(Object.assign({ rpico: 0.20, peq: 0.40 }, over));
 
-test('retraso 8 meses, umbral 90 %: ventas terminan en 50 % → umbral no alcanzado, sin desembolsos', () => {
-  const inp = inpRepro({ retraso: 8 }), r = correr(M, inp), m = r.m;
-  assert.ok(Math.abs(m.vAcum - 0.5) < 1e-9);
-  assert.equal(m.mesUmbral, -1);
-  assert.equal(m.credEstado, 'no_alcanzado');
-  assertSinCredito(r, inp);
-});
-
-test('control válido (sin retraso, umbral 40 %): tres tramos iguales en los meses 7, 8 y 9', () => {
-  const { m } = correr(M, inpRepro({ retraso: 0, peq: 0.40 }));
+test('control (sin retraso): umbral en el mes 7 → tres tramos iguales en los meses 7, 8 y 9', () => {
+  const { m } = correr(M, esc({ retraso: 0 }));
   assert.equal(m.credEstado, 'abierto');
   assert.equal(m.mesUmbral + 1, 7);
   assert.equal(m.mesAp + 1, 7);
@@ -57,23 +46,39 @@ test('control válido (sin retraso, umbral 40 %): tres tramos iguales en los mes
   assert.ok(m.totalInt > 0 && m.saldoFinal > 0);
 });
 
-test('control tal como está escrito en el informe (retraso 6, umbral 40 %): el umbral llega en el mes 11 → sin desembolsos', () => {
-  // El informe atribuye a este caso desembolsos en 7, 8 y 9. Con retraso 6 las ventas empiezan
-  // en el mes 10, así que el 40 % no puede cumplirse antes del fin de obra (mes 9).
-  const inp = inpRepro({ retraso: 6, peq: 0.40 }), r = correr(M, inp), m = r.m;
-  assert.equal(m.mesUmbral + 1, 11);
+test('retraso 3 meses: el umbral llega en el mes 10, después de la obra (mes 9) → sin desembolsos', () => {
+  const inp = esc({ retraso: 3 }), r = correr(M, inp), m = r.m;
+  assert.equal(m.finObra, 9);
+  assert.equal(m.mesUmbral + 1, 10);
   assert.equal(m.credEstado, 'tardio');
   assertSinCredito(r, inp);
 });
 
-test('umbral alcanzado en el último mes de obra: un solo tramo, sin concentrar el remanente', () => {
-  const { m } = correr(M, inpRepro({ retraso: 2, peq: 0.40 }));
+test('retraso 8 meses: solo se vende el 5 % → umbral no alcanzado, sin desembolsos', () => {
+  const inp = esc({ retraso: 8 }), r = correr(M, inp), m = r.m;
+  assert.ok(Math.abs(m.vAcum - 0.05) < 1e-9);
+  assert.equal(m.mesUmbral, -1);
+  assert.equal(m.credEstado, 'no_alcanzado');
+  assertSinCredito(r, inp);
+});
+
+test('retraso 2 meses: umbral en el último mes de obra → un solo tramo, sin concentrar el remanente', () => {
+  const { m } = correr(M, esc({ retraso: 2 }));
   assert.equal(m.mesUmbral + 1, 9, 'umbral en el último mes de obra');
   assert.equal(m.credEstado, 'abierto');
   assert.deepEqual(mesesCon(m.desemb), [9]);
   assert.equal(m.tramosEmit, 1);
   assert.ok(Math.abs(m.desemb[8] - m.montoCred / 3) < 1, 'solo un tramo, no el cupo completo');
   assert.ok(Math.abs(m.cupoNoDes - m.montoCred * 2 / 3) < 1, 'dos tercios del cupo quedan sin desembolsar');
+});
+
+test('casos del informe original (ritmo 15 %, retraso 6 u 8, umbral 90 % o 40 %): ninguno abre el crédito', () => {
+  // En el código original los tres recibían el cupo completo en el mes 9.
+  for (const over of [{ retraso: 6 }, { retraso: 8 }, { retraso: 6, peq: 0.40 }]) {
+    const inp = inpRepro(over), r = correr(M, inp);
+    assert.notEqual(r.m.credEstado, 'abierto', JSON.stringify(over));
+    assertSinCredito(r, inp);
+  }
 });
 
 test('invariantes en una malla de supuestos (los mismos que recorre Monte Carlo)', () => {
@@ -116,12 +121,13 @@ test('invariantes en una malla de supuestos (los mismos que recorre Monte Carlo)
 });
 
 test('ventas acumuladas iguales al umbral salvo error de coma flotante cuentan como umbral cumplido', () => {
-  // Curva lineal: el acumulado llega a 0,39999999999999986 y la interfaz muestra 40,0 %.
+  // Curva lineal, ritmo 10 %: 6,5 % mensual; tras 10 meses el acumulado es 0,6499999999999999
+  // y la interfaz muestra 65,0 %.
   M.setCurva('lineal');
-  const { m } = correr(M, inpBase({ retraso: 6, peq: 0.40, tramos: 3 }));
+  const { m } = correr(M, inpBase({ rpico: 0.10, peq: 0.65 }));
   M.setCurva('rapida');
-  assert.equal(m.mesUmbral + 1, 18);
-  assert.deepEqual(mesesCon(m.desemb), [18, 19, 20]);
+  assert.equal(m.mesUmbral + 1, 14);
+  assert.equal(m.mesAp + 1, 14);
 });
 
 test('los intereses siguen la misma tasa y fórmula sobre el saldo vigente', () => {

@@ -25,7 +25,7 @@ Reglas que aplica `calcModel()` en `index.html`. Los meses son los que ve el usu
 
 Regla implementada (la más conservadora): **no se desembolsan**. El cupo restante queda sin usar, se informa en el panel y se emite una alerta. Antes, el remanente se sumaba completo al último mes de obra.
 
-Esto no afecta solo al caso límite. Con los supuestos por defecto (apertura en el mes 12, obra hasta el mes 22) hay 11 meses disponibles: cualquier configuración de más de 11 tramos deja cupo sin desembolsar. Con 20 tramos se desembolsa el 55 % del cupo.
+Esto no afecta solo al caso límite: siempre que haya menos meses entre la apertura y el fin de obra que tramos configurados, parte del cupo queda sin desembolsar. Con obra de 18 meses y apertura en el mes 12 de un cronograma que termina obra en el mes 22 hay 11 meses disponibles; con 20 tramos se desembolsa el 55 % del cupo.
 
 Alternativas a decidir:
 
