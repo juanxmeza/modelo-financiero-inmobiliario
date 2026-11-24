@@ -26,7 +26,7 @@ No hay control de «tramos»: el calendario de giros lo determina el avance de l
 
 - Los intereses se causan cada mes sobre el principal vigente, a `tasa anual / 12`. No se capitalizan.
 - Se pagan por **trimestre vencido**, contado desde el mes del primer giro: en el tercer mes, el sexto, etc.
-- El principal se cancela completo en el mes de la entrega (el siguiente al último mes de obra), junto con los intereses causados desde el último pago trimestral. La fuente prevista es el saldo de los compradores; si no alcanza, `faltaPago` cuantifica la diferencia y la interfaz lo avisa en el panel y en una alerta. El flujo registra el pago completo en cualquier caso.
+- El principal se cancela completo en el mes de la entrega (el siguiente al último mes de obra), junto con los intereses causados desde el último pago trimestral. La fuente prevista es el saldo de los compradores; si no alcanza, `faltaPago` cuantifica la brecha frente a esa fuente y la interfaz lo avisa en el panel y en una alerta, junto con el flujo acumulado del proyecto tras el pago. Una brecha no implica por sí sola falta de caja total, y el modelo no verifica si la otra caja está disponible para el banco. El flujo registra el pago completo en cualquier caso.
 - El interés total no depende de la periodicidad de pago; solo cambia en qué meses sale la caja.
 
 ## Supuestos decididos por Juan (pendientes de contrastar con un contrato real)
