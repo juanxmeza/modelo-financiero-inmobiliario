@@ -250,7 +250,7 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
 
   <div class="kpi-row">
     <div class="kpi"><div class="kl">Utilidad neta</div><div class="kv green" id="k-util">—</div><div class="ks" id="k-marg">—</div></div>
-    <div class="kpi"><div class="kl">TIR inversionista</div><div class="kv blue" id="k-tir">—</div><div class="ks">sobre equity · anual</div></div>
+    <div class="kpi"><div class="kl">TIR inversionista</div><div class="kv blue" id="k-tir">—</div><div class="ks">del flujo mensual · anual · después de impuestos</div></div>
     <div class="kpi"><div class="kl">VPN</div><div class="kv blue" id="k-vpn">—</div><div class="ks" id="k-vpns">—</div></div>
     <div class="kpi" style="border-color:#0284c7"><div class="kl" style="color:#0369a1">Crédito constructor</div><div class="kv sky" id="k-cred">—</div><div class="ks" id="k-cred-sub">—</div></div>
     <div class="kpi" style="border-color:#e34948"><div class="kl" style="color:#a32d2d">Pico equity requerido</div><div class="kv red" id="k-pico">—</div><div class="ks" id="k-pico-mes">—</div></div>
@@ -316,8 +316,8 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
     <div class="panel">
       <div class="pt"><span class="dot db"></span>Flujo de caja neto mensual</div>
       <div class="legend">
-        <span class="li"><span class="ld" style="background:#1baf7a"></span>Ingresos mes</span>
-        <span class="li"><span class="ld" style="background:#e34948"></span>Egresos mes (construcción + intereses)</span>
+        <span class="li"><span class="ld" style="background:#1baf7a"></span>Entradas mes (ventas + desembolsos del crédito)</span>
+        <span class="li"><span class="ld" style="background:#e34948"></span>Egresos mes (terreno, obra, gastos, pago del crédito e impuesto)</span>
         <span class="li"><span class="ld" style="background:#2a78d6"></span>Flujo acumulado</span>
       </div>
       <div class="cw-xl"><canvas id="chartFlujos" role="img" aria-label="Flujo de caja neto mensual"></canvas></div>
@@ -421,7 +421,7 @@ function fM(cop) {
   }
 }
 
-function fP(v, d = 1) { return v === null ? '—' : v.toFixed(d) + '%'; }
+function fP(v, d = 1) { return (v === null || !isFinite(v)) ? '—' : v.toFixed(d) + '%'; }
 
 // Escala array COP a unidades de display para Chart.js (en millones COP o miles USD)
 function scaleArr(arr) {
@@ -557,30 +557,7 @@ function calcModel(inp, prog, fin) {
   const totalInt   = intMes.reduce((a,b)=>a+b,0);
   const saldoFinal = finObra > 0 && finObra <= N ? saldoCred[finObra-1] : 0;
 
-  // Egresos totales
-  const egMes = Array(N).fill(0);
-  egMes[0] += prog.cT;
-  for (let i = 0; i < N; i++) egMes[i] += costConst[i] + costIndir[i] + intMes[i];
-  if (finObra < N) egMes[finObra] += saldoFinal;
-  for (let i = inicioV; i < N; i++) { const u = unidMes[i]; if (u > 0) egMes[i] += (fin.gC + fin.gA) * u; }
-
-  // Flujos
-  const flujoNeto = ingTotalMes.map((v,i) => v - egMes[i]);
-  let acF = 0; const flujoAcum = flujoNeto.map(f => { acF += f; return acF; });
-  let acE = 0; const egAcum    = egMes.map(e => { acE += e; return acE; });
-  let acI = 0; const ingAcum   = ingTotalMes.map(v => { acI += v; return acI; });
-  let acD = 0; const desAcum   = desemb.map(d => { acD += d; return acD; });
-  let acP = 0; const prevAcum  = ingPreventaMes.map(v => { acP += v; return acP; });
-
-  // Equity requerido = brecha real
-  const equityReq = egAcum.map((e,i) => Math.max(0, e - desAcum[i] - prevAcum[i]));
-  const picoEq    = Math.max(...equityReq, 0);
-  const mesPico   = equityReq.indexOf(picoEq) + 1;
-
-  let payback = null;
-  for (let i = 0; i < flujoAcum.length; i++) { if (flujoAcum[i] >= 0 && !payback) payback = i + 1; }
-
-  // Estado de resultados
+  // Estado de resultados (se calcula antes del flujo porque el impuesto entra al flujo)
   const ingTot  = ingTotalMes.reduce((a,b)=>a+b,0);
   const uBruta  = ingTot - prog.cT - fin.cC - fin.cI;
   const uAI     = uBruta - fin.gC - fin.gA - totalInt;
@@ -588,15 +565,65 @@ function calcModel(inp, prog, fin) {
   const uN      = uAI - impM;
   const mN      = ingTot > 0 ? uN / ingTot : 0;
   const mB      = ingTot > 0 ? uBruta / ingTot : 0;
-  const MOIC    = picoEq > 0 ? (picoEq + uN) / picoEq : 1;
 
-  return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, ingTotalMes, egMes, flujoNeto,
+  // Pago del crédito: los intereses se capitalizan durante la obra y todo se paga de una vez.
+  // No se restan mes a mes (antes se restaban dos veces: cada mes y dentro del saldo final).
+  const pagoCred = Array(N).fill(0);
+  if (finObra < N) pagoCred[finObra] = saldoFinal + intMes[finObra];
+  else             pagoCred[N-1]     = saldoCred[N-1];
+
+  // Egresos totales (caja): terreno, obra, gastos, pago del crédito e impuesto de renta al cierre
+  const egMes = Array(N).fill(0);
+  egMes[0] += prog.cT;
+  for (let i = 0; i < N; i++) egMes[i] += costConst[i] + costIndir[i] + pagoCred[i];
+  for (let i = inicioV; i < N; i++) { const u = unidMes[i]; if (u > 0) egMes[i] += (fin.gC + fin.gA) * u; }
+  egMes[N-1] += impM;
+
+  // Flujos: los desembolsos del crédito son entrada de caja (antes no entraban y su pago sí salía)
+  const entMes    = ingTotalMes.map((v,i) => v + desemb[i]);
+  const flujoNeto = entMes.map((v,i) => v - egMes[i]);
+  let acF = 0; const flujoAcum = flujoNeto.map(f => { acF += f; return acF; });
+  let acE = 0; const egAcum    = egMes.map(e => { acE += e; return acE; });
+  let acI = 0; const ingAcum   = ingTotalMes.map(v => { acI += v; return acI; });
+  let acD = 0; const desAcum   = desemb.map(d => { acD += d; return acD; });
+
+  // Equity requerido = faltante de caja acumulado (cuenta crédito, preventas y saldos de venta)
+  const equityReq = flujoAcum.map(v => Math.max(0, -v));
+  const picoEq    = Math.max(...equityReq, 0);
+  const mesPico   = equityReq.indexOf(picoEq) + 1;
+
+  let payback = null;
+  for (let i = mesPico - 1; i < flujoAcum.length; i++) { if (flujoAcum[i] >= 0 && !payback) payback = i + 1; }
+
+  const MOIC    = picoEq > 0 ? (picoEq + uN) / picoEq : 1;
+  const tir     = calcTIR(flujoNeto);
+
+  return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, ingTotalMes, entMes, egMes, flujoNeto,
     flujoAcum, egAcum, ingAcum, desemb, desAcum, saldoCred, intMes, equityReq,
     picoEq, mesPico, montoCred, mesAp, totalInt, saldoFinal, payback, vAcum,
-    N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC };
+    N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC, tir };
 }
 
 function calcVPN(cf, r) { return cf.reduce((a,v,t) => a + v / Math.pow(1 + r/12, t), 0); }
+
+// TIR anual del flujo mensual (después de impuestos). Devuelve NaN si el flujo no tiene TIR.
+// Busca la raíz más cercana a cero: hacia arriba si el proyecto gana, hacia abajo si pierde.
+function calcTIR(cf) {
+  const f = r => cf.reduce((a,v,t) => a + v / Math.pow(1 + r, t), 0);
+  const f0 = f(0); if (!isFinite(f0) || f0 === 0) return f0 === 0 ? 0 : NaN;
+  const paso = f0 > 0 ? 0.0025 : -0.0025, tope = f0 > 0 ? 3 : -0.95;
+  let a = 0, fa = f0;
+  for (let b = paso; f0 > 0 ? b <= tope : b >= tope; b += paso) {
+    const fb = f(b);
+    if (fa * fb <= 0) {
+      let lo = a, hi = b, flo = fa;
+      for (let k = 0; k < 60; k++) { const mid = (lo + hi) / 2, fm = f(mid); if (flo * fm <= 0) hi = mid; else { lo = mid; flo = fm; } }
+      return Math.pow(1 + (lo + hi) / 2, 12) - 1;
+    }
+    a = b; fa = fb;
+  }
+  return NaN;
+}
 
 function calcWF(inp, m) {
   const lp = 1 - inp.gppct; const lpC = m.eqInv * lp; const gpC = m.eqInv * inp.gppct;
@@ -659,7 +686,7 @@ function renderChartFlujos(m) {
   const ctx = document.getElementById('chartFlujos').getContext('2d');
   const labs = Array.from({length:m.N}, (_,i) => 'M'+(i+1));
   charts['fl'] = new Chart(ctx, { type:'bar', data:{ labels:labs, datasets:[
-    { label:'Ingresos', data:scaleArr(m.ingTotalMes), backgroundColor:'rgba(27,175,122,0.65)', order:2 },
+    { label:'Entradas (ventas + crédito)', data:scaleArr(m.entMes), backgroundColor:'rgba(27,175,122,0.65)', order:2 },
     { label:'Egresos',  data:m.egMes.map(v=>Math.round(toDisp(-v)/( activeCur==='COP'?1e6:1e3/getTRM()))), backgroundColor:'rgba(227,73,72,0.55)', order:2 },
     { label:'Acumulado',data:scaleArr(m.flujoAcum), type:'line', borderColor:'#2a78d6', borderWidth:2, pointRadius:0, fill:false, order:1 }
   ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
@@ -693,9 +720,9 @@ function renderCredPanel(inp, prog, fin, m) {
 function renderKPIs(inp, m) {
   document.getElementById('k-util').textContent = fM(m.uN);
   document.getElementById('k-marg').textContent = 'Margen neto: ' + fP(m.mN*100);
-  const tir = Math.pow(m.MOIC, 12/inp.dtotal) - 1;
+  const tir = m.tir;
   document.getElementById('k-tir').textContent  = fP(tir*100);
-  document.getElementById('k-vpn').textContent  = fM(calcVPN([-m.eqInv,...m.flujoNeto], inp.tvpn));
+  document.getElementById('k-vpn').textContent  = fM(calcVPN(m.flujoNeto, inp.tvpn));
   document.getElementById('k-vpns').textContent = '@ ' + fP(inp.tvpn*100);
   document.getElementById('k-cred').textContent = fM(m.montoCred);
   document.getElementById('k-cred-sub').textContent = m.vAcum >= inp.peq ? 'PEQ ✓ Mes '+(m.mesAp+1) : 'PEQ no alcanzado ✗';
@@ -722,7 +749,7 @@ function renderBanner(inp, m, fin) {
 }
 
 function renderAlerts(inp, m, fin) {
-  const tir = Math.pow(m.MOIC, 12/inp.dtotal) - 1;
+  const tir = m.tir;
   const al = [];
   if (m.vAcum < inp.peq) al.push({t:'red',   m:`Absorción (${fP(m.vAcum*100)}) insuficiente para abrir crédito constructor. El proyecto debe financiarse 100% con equity.`, f:''});
   if (tir < 0)           al.push({t:'red',   m:`TIR negativa (${fP(tir*100)}). El proyecto destruye valor incluyendo el costo de la deuda.`, f:'Ajusta precios o reduce costos directos.'});
@@ -806,7 +833,7 @@ function renderSens(inp, prog) {
     pd.forEach(p => {
       const f2 = calcFin(inp, prog, 1+p);
       const m2 = calcModel(inp, prog, f2);
-      const tir = Math.pow(m2.MOIC, 12/inp.dtotal) - 1;
+      const tir = m2.tir;
       const c = tir > inp.hurdle ? 'sg2' : tir > 0 ? 'sm2' : 'sb2';
       h += `<td><span class="sc-cell ${c}">${fP(tir*100)}</span></td>`;
     });
@@ -822,8 +849,8 @@ function renderScen(inp, prog, m) {
     const f2  = calcFin(inp, prog, s.pM);
     const m2  = calcModel(inp, prog, f2);
     const wf2 = calcWF(inp, m2);
-    const tir = Math.pow(m2.MOIC, 12/inp.dtotal) - 1;
-    const vpn = calcVPN([-m2.eqInv,...m2.flujoNeto], inp.tvpn);
+    const tir = m2.tir;
+    const vpn = calcVPN(m2.flujoNeto, inp.tvpn);
     const viable = tir > inp.hurdle ? 'v' : tir > 0 ? 'm' : 'n';
     const vl     = tir > inp.hurdle ? 'VIABLE' : tir > 0 ? 'MARGINAL' : 'NO VIABLE';
     h += `<div class="sc ${s.cl}"><div class="sc-title">${s.l}</div>
@@ -897,7 +924,7 @@ update();
   function rTri(a,m,b,rng){ const u=rng(), fc=(m-a)/(b-a); return u<fc ? a+Math.sqrt(u*(b-a)*(m-a)) : b-Math.sqrt((1-u)*(b-a)*(b-m)); }
   function muestra(d,rng){ if(d.tipo==='pert'){ const al=1+4*(d.moda-d.min)/(d.max-d.min), be=1+4*(d.max-d.moda)/(d.max-d.min); return d.min+(d.max-d.min)*rBeta(al,be,rng); } return rTri(d.min,d.moda,d.max,rng); }
   function salidasDe(inp){ const prog=calcProg(inp), fin=calcFin(inp,prog), m=calcModel(inp,prog,fin), wf=calcWF(inp,m);
-    return { tir:Math.pow(m.MOIC,12/inp.dtotal)-1, vpn:calcVPN([-m.eqInv,...m.flujoNeto],inp.tvpn), tirLP:wf.tirLP, tirGP:wf.tirGP }; }
+    return { tir:m.tir, vpn:calcVPN(m.flujoNeto,inp.tvpn), tirLP:wf.tirLP, tirGP:wf.tirGP }; }
   const DRIVERS=[
     {key:'pv',label:'Precio de venta',unidad:'COP/m²',f:1,dec:0,lo:0.85,hi:1.15},
     {key:'csr',label:'Costo construcción (sobre rasante)',unidad:'COP/m²',f:1,dec:0,lo:0.90,hi:1.15},
@@ -972,7 +999,7 @@ update();
       const sAbs=torn.reduce(function(s,x){return s+Math.abs(x.r);},0)||1;
       function kpi(l,v,s){ return '<div class="kpi"><div class="kl">'+l+'</div><div class="kv blue">'+v+'</div><div class="ks">'+(s||'')+'</div></div>'; }
       let html='<div class="kpi-row">'+
-        kpi('TIR media', fP(media(tS)*100), 'sobre equity · anual')+
+        kpi('TIR media', fP(media(tS)*100), 'del flujo mensual · anual')+
         kpi('TIR P10 (pesimista)', fP(pctil(tS,10)*100),'1 de cada 10 peor')+
         kpi('TIR P50 (mediana)', fP(pctil(tS,50)*100),'escenario central')+
         kpi('TIR P90 (optimista)', fP(pctil(tS,90)*100),'1 de cada 10 mejor')+
