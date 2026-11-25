@@ -221,7 +221,6 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
     <div class="sl"><span class="dot dr"></span>Comercial y financiero</div>
     <div class="f"><label>Gastos comerciales (% ventas) <span class="val" id="v-gc">5.5</span>%</label><input type="range" id="gc" min="1" max="12" step="0.5" value="5.5"></div>
     <div class="f"><label>Gastos administrativos (% ventas) <span class="val" id="v-ga">2</span>%</label><input type="range" id="ga" min="0.5" max="6" step="0.5" value="2"></div>
-    <div class="f"><label>Equity GP+LP (% costo total) <span class="val" id="v-equity">40</span>%</label><input type="range" id="equity" min="20" max="100" step="5" value="40"></div>
     <div class="f"><label>Impuesto a la renta (%) <span class="val" id="v-imp">33</span>%</label><input type="range" id="imp" min="10" max="40" step="0.5" value="33"></div>
     <div class="f"><label>Tasa descuento VPN (% anual) <span class="val" id="v-tvpn">12</span>%</label><input type="range" id="tvpn" min="5" max="25" step="0.5" value="12"></div>
   </div>
@@ -470,7 +469,7 @@ function getInp() {
     peq: g('peq')/100, pfinc: g('pfinc')/100, tcred: g('tcred')/100, tramos: Math.round(g('tramos')),
     csr: g('csr'), csot: g('csot'), ciind: g('ciind')/100,
     gc: g('gc')/100, ga: g('ga')/100,
-    equity: g('equity')/100, imp: g('imp')/100, tvpn: g('tvpn')/100,
+    imp: g('imp')/100, tvpn: g('tvpn')/100,
     dtotal: Math.round(g('dtotal')), dprev: Math.round(g('dprev')), dobra: Math.round(g('dobra')),
     rpico: g('rpico')/100, mpico: Math.round(g('mpico')), retraso: Math.round(g('retraso')),
     gppct: g('gppct')/100, hurdle: g('hurdle')/100, gpsplit: g('gpsplit')/100
@@ -506,7 +505,7 @@ function calcModel(inp, prog, fin) {
   // La obra debe terminar dentro del horizonte: al menos un mes para entregar y cancelar el crédito
   const N       = Math.max(inp.dtotal, finObra + 1);
   // La preventa arranca el mes 1 (más el retraso), no al inicio de la obra
-  const inicioV = Math.min(inp.retraso, N - 1);
+  const inicioV = Math.min(Math.max(0, Math.round(inp.retraso)), N - 1);   // meses enteros (Monte Carlo sortea decimales)
   const mVenta  = Math.max(1, N - inicioV);
 
   // Absorción: el ritmo es el % real de unidades vendidas por mes (antes se reescalaba
@@ -606,6 +605,7 @@ function calcModel(inp, prog, fin) {
   let acE = 0; const egAcum    = egMes.map(e => { acE += e; return acE; });
   let acI = 0; const ingAcum   = ingTotalMes.map(v => { acI += v; return acI; });
   let acD = 0; const desAcum   = desemb.map(d => { acD += d; return acD; });
+  let acP = 0; const prevAcum  = ingPreventaMes.map(v => { acP += v; return acP; });
 
   // Equity requerido = faltante de caja acumulado (cuenta crédito, preventas y saldos de venta)
   const equityReq = flujoAcum.map(v => Math.max(0, -v));
@@ -618,7 +618,7 @@ function calcModel(inp, prog, fin) {
   const MOIC    = picoEq > 0 ? (picoEq + uN) / picoEq : 1;
   const tir     = calcTIR(flujoNeto);
 
-  return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, ingTotalMes, entMes, egMes, flujoNeto,
+  return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, prevAcum, ingTotalMes, entMes, egMes, flujoNeto,
     flujoAcum, egAcum, ingAcum, desemb, desAcum, saldoCred, intMes, equityReq,
     picoEq, mesPico, montoCred, mesAp, totalInt, saldoFinal, payback, vAcum,
     N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC, tir,
@@ -689,7 +689,7 @@ function renderChartFin(m) {
   charts['fin'] = new Chart(ctx, { type:'bar', data:{ labels:labs, datasets:[
     { label:'Equity', data:scaleArr(m.equityReq), backgroundColor:m.equityReq.map((_,i)=>i===picoIdx?'rgba(227,73,72,0.85)':'rgba(42,120,214,0.55)'), order:3, yAxisID:'y' },
     { label:'Crédito', data:scaleArr(m.desAcum), type:'line', borderColor:'#0ea5e9', borderWidth:2, pointRadius:0, fill:false, order:2, yAxisID:'y' },
-    { label:'Preventa', data:scaleArr(m.ingAcum), type:'line', borderColor:'#1baf7a', borderWidth:2, pointRadius:0, borderDash:[4,3], fill:false, order:1, yAxisID:'y' }
+    { label:'Preventa', data:scaleArr(m.prevAcum), type:'line', borderColor:'#1baf7a', borderWidth:2, pointRadius:0, borderDash:[4,3], fill:false, order:1, yAxisID:'y' }
   ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
     scales:{x:{ticks:{font:{size:9},autoSkip:true,maxTicksLimit:15}}, y:{ticks:{font:{size:9},callback:v=>chartLabel(v)}}}}});
 }
@@ -725,7 +725,7 @@ function renderChartFlujos(m) {
   const labs = Array.from({length:m.N}, (_,i) => 'M'+(i+1));
   charts['fl'] = new Chart(ctx, { type:'bar', data:{ labels:labs, datasets:[
     { label:'Entradas (ventas + crédito)', data:scaleArr(m.entMes), backgroundColor:'rgba(27,175,122,0.65)', order:2 },
-    { label:'Egresos',  data:m.egMes.map(v=>Math.round(toDisp(-v)/( activeCur==='COP'?1e6:1e3/getTRM()))), backgroundColor:'rgba(227,73,72,0.55)', order:2 },
+    { label:'Egresos',  data:scaleArr(m.egMes.map(v=>-v)), backgroundColor:'rgba(227,73,72,0.55)', order:2 },
     { label:'Acumulado',data:scaleArr(m.flujoAcum), type:'line', borderColor:'#2a78d6', borderWidth:2, pointRadius:0, fill:false, order:1 }
   ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
     scales:{x:{ticks:{font:{size:9},autoSkip:true,maxTicksLimit:15}}, y:{ticks:{font:{size:9},callback:v=>chartLabel(v)}}}}});

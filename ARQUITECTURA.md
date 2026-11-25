@@ -49,3 +49,12 @@ Juan pidió corregir «todas, absolutamente todas» las fallas encontradas al pr
 Comprobado con 20.000 combinaciones al azar: flujo = utilidad neta, ingresos = lo vendido, crédito = desembolsos, y aportes y repartos de socios cuadran con el equity pico y la utilidad.
 
 No incluido (límites conocidos del modelo): el inventario sin vender no tiene valor; no hay IVA, retenciones ni capital de trabajo; el impuesto se paga todo al final.
+
+### 2026-11-24 — Tercera tanda (Juan: «Sí, corrígelas»)
+
+| Tema | Qué se hizo | Cómo estaba / qué se descartó |
+|---|---|---|
+| Retraso con decimales | El retraso se redondea a meses enteros dentro del cálculo. | Monte Carlo sorteaba retrasos con decimales y todas esas corridas daban error (0 válidas). |
+| Control «Equity GP+LP (% costo total)» | Se quitó. | Ningún cálculo lo usaba; el equity sale del faltante de caja. Descartado: darle un uso, porque cambiaría el método. |
+| Gráfica de financiamiento | La línea «Preventa acumulada (sep + CI)» ahora suma solo separaciones y cuotas. | Sumaba también los saldos a la entrega. |
+| Gráfica de flujo en USD | Las barras de egresos usan la misma escala que las demás. | En USD salían en miles de pesos, no en miles de dólares. |
