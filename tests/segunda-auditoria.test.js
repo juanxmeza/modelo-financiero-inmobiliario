@@ -28,10 +28,10 @@ test('TIR: estados distintos para sin recuperación, sin inversión, sin raíz y
   assert.equal(sinRaiz.tir, null); assert.equal(sinRaiz.estado, 'sin_raiz');
   const multi = M.calcTIRinfo([-100, 260, -165]);            // raíces en 10 % y 50 % mensual
   assert.equal(multi.estado, 'multiple'); assert.equal(multi.raices, 2);
-  assert.ok(cerca(multi.tir, anual(0.1)), 'se informa la más cercana a cero');
+  assert.equal(multi.tir, null, 'con varias tasas no se informa ninguna');
   const tres = M.calcTIRinfo([-1, 3.062, -3.12500075, 1.06300558]);   // 1,05 %, 1,15 % y 4 % mensual
   assert.equal(tres.estado, 'multiple'); assert.equal(tres.raices, 3);
-  assert.ok(cerca(tres.tir, anual(0.0105), 1e-4), 'antes devolvía la de 4 % y saltaba las dos cercanas');
+  assert.equal(tres.tir, null, 'antes devolvía la de 4 % y saltaba las dos cercanas');
   assert.equal(M.calcTIRinfo([-100, 0, 121]).estado, 'ok');
   // el impuesto del último mes crea una raíz a tasa muy negativa: no vuelve ambiguo el caso por defecto
   const d = correr(M, inpBase()).m;
@@ -119,7 +119,7 @@ test('TIR: se conserva la raíz mensual; la anualización cerca de −100 % no l
   const vp = m.flujoNeto.reduce((a, v, t) => a + v / Math.pow(x, t + 1), 0);
   const escala = m.flujoNeto.reduce((a, v, t) => a + Math.abs(v) / Math.pow(x, t + 1), 0);
   assert.ok(Math.abs(vp) < 1e-9 * escala);
-  assert.match(M.html, /if \(t < -0\.9995 && estado !== 'sin_recuperacion'\) return '< -99\.9%'/);
+  assert.match(M.html, /if \(t <= -0\.9995 && estado !== 'sin_recuperacion'\) return '< -99\.9%'/);
 });
 
 test('TIR: un proyecto con pérdida y dos tasas negativas se marca como múltiple', () => {
@@ -128,7 +128,7 @@ test('TIR: un proyecto con pérdida y dos tasas negativas se marca como múltipl
   assert.ok(m.uN < 0);
   assert.equal(m.tirEstado, 'multiple');
   assert.equal(m.tirRaices, 2);
-  assert.ok(m.tir > -0.01 && m.tir < 0, 'se informa la más cercana a cero');
+  assert.equal(m.tir, null); assert.equal(m.tirMes, null);
   // las dos raíces a tasas negativas del caso por defecto (rentable) siguen sin contar
   const d = correr(M, inpBase()).m;
   assert.equal(d.tirEstado, 'ok'); assert.equal(d.tirRaices, 1);
@@ -138,7 +138,7 @@ test('Monte Carlo: el contador de TIR definidas no cuenta las nulas y sin muestr
   assert.equal(isFinite(null), true, 'motivo del defecto: isFinite(null) es verdadero');
   assert.match(M.html, /if\(isFinite\(tir\[it\]\)\)nOK\+\+/);
   assert.ok(!/isFinite\(o\.tir\)/.test(M.html));
-  assert.match(M.html, /kpi\('TIR media', nOK\?fTir\(media\(tS\)\):'n\/d'/);
+  assert.match(M.html, /kpi\('TIR media', nOK\?fT\(media\(tS\)\):'n\/d'/);
   assert.match(M.html, /if\(nOK\) histCanvas/);
   assert.match(M.html, /sobre el total de iteraciones/);
 });
@@ -148,4 +148,56 @@ test('alertas: sin afirmaciones absolutas sobre la TIR ni sobre la caja', () => 
   assert.match(M.html, /no se encontró ninguna tasa entre −99,9 % y \+900 % mensual/);
   assert.match(M.html, /el modelo no verifica si esa caja está disponible para el banco/);
   assert.match(M.html, /tir >= 0 \? 'TIR BAJO LA META'/);
+});
+
+// ── Cuarta auditoría: la TIR solo se muestra cuando es única ───────────────────────────────────
+
+test('TIR: un proyecto con pérdida no puede mostrar una TIR positiva (antes: 14,8 % sobre la meta)', () => {
+  M.setCurva('lineal');
+  const inp = inpBase({ dtotal: 60, dprev: 0, dobra: 24, retraso: 0, rpico: 0.185, peq: 0.4, pfinc: 0.9, tcred: 0.25, ga: 0.06, gc: 0.01, tvpn: 0.12, csr: 2500000, csot: 2800000, pterre: 1200000, terreno: 500, pisos: 20, sotan: 3, sepPct: 0.05, ciPct: 0.4, mesci: 1, salPct: 0.55, pv: 4900000 });
+  const { m } = correr(M, inp);
+  M.setCurva('rapida');
+  assert.ok(m.uN < 0 && M.calcVPNeq(m, inp.tvpn) < 0, 'pérdida nominal y VPN negativo');
+  assert.equal(m.tirEstado, 'multiple');
+  assert.equal(m.tir, null);
+});
+
+test('TIR: en toda la malla, si hay TIR su signo coincide con el de la utilidad y anula el valor presente', () => {
+  let n = 0, conTir = 0;
+  for (const curva of ['s', 'rapida', 'lenta', 'lineal']) {
+    M.setCurva(curva);
+    for (const [dtotal, dprev, dobra] of [[12, 3, 6], [30, 4, 18], [60, 0, 24], [12, 0, 18]])
+    for (const retraso of [0, 3, 8]) for (const rpico of [0.03, 0.08, 0.12, 0.2])
+    for (const pv of [4500000, 7500000, 10080000, 16000000]) for (const tcred of [0.08, 0.25]) {
+      const { m } = correr(M, inpBase({ dtotal, dprev, dobra, retraso, rpico, pv, tcred }));
+      n++;
+      assert.ok(['ok', 'multiple', 'sin_recuperacion', 'sin_raiz', 'sin_inversion'].includes(m.tirEstado));
+      assert.equal(m.tir === null, m.tirMes === null);
+      assert.equal(m.tir === null, ['multiple', 'sin_raiz', 'sin_inversion'].includes(m.tirEstado));
+      if (m.tirEstado !== 'ok') continue;
+      conTir++;
+      const ctx = JSON.stringify({ curva, dtotal, dprev, dobra, retraso, rpico, pv, tcred });
+      assert.equal(Math.sign(m.tirMes), Math.sign(m.uN), 'signo: ' + ctx);
+      const x = 1 + m.tirMes;
+      const vp = m.flujoNeto.reduce((a, v, t) => a + v / Math.pow(x, t + 1), 0);
+      const esc = m.flujoNeto.reduce((a, v, t) => a + Math.abs(v) / Math.pow(x, t + 1), 0);
+      assert.ok(Math.abs(vp) <= 1e-9 * esc, 'residuo: ' + ctx);
+    }
+  }
+  M.setCurva('rapida');
+  assert.ok(n > 1500 && conTir > 500);
+});
+
+test('TIR: una raíz casi en cero no se cuenta dos veces', () => {
+  const r = M.calcTIRinfo([-1, 1.000000000001]);
+  assert.equal(r.estado, 'ok'); assert.equal(r.raices, 1);
+});
+
+test('Monte Carlo: composición por estado, orden por tasa mensual, VPN con denominador válido y rangos acotados', () => {
+  assert.match(M.html, /con TIR única · '\+cuenta\.sin_recuperacion\+' con pérdida total/);
+  assert.match(M.html, /const tirOK=okI\.map\(function\(i\)\{return tirM\[i\];\}\)/);
+  assert.match(M.html, /pVpnPos=nV\?pVpnPos\/nV:NaN/);
+  assert.match(M.html, /a\.max<=hi\*10/);
+  assert.ok(!/' \*'/.test(M.html), 'ya no hay asterisco sin leyenda en escenarios');
+  assert.ok(!M.html.includes('por convención'), 'ya no se elige una tasa entre varias');
 });

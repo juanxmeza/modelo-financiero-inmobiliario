@@ -20,16 +20,15 @@ La suma del flujo es la utilidad neta del estado de resultados; hay una prueba q
 
 - **VPN:** valor presente del flujo, con cada mes descontado a fin de mes a `tasa anual / 12`. La tasa del control es nominal: 12 % equivale a 12,68 % efectivo anual, que es la cifra comparable con la TIR.
 - **Pico de equity:** déficit máximo del flujo acumulado. La serie mensual de equity es ese déficit mes a mes.
-- **TIR del inversionista:** tasa interna de retorno del flujo mensual, anualizada como `(1 + tasa mensual)^12 − 1`. El modelo guarda también la raíz mensual (`tirMes`), porque la anualización pierde precisión cerca de −100 %: una pérdida de −97 % mensual anualiza a −100 % en coma flotante. La interfaz muestra «< −99,9 %» en esos casos, para no confundirlos con la pérdida total. Estados (`tirEstado`):
-  - `ok`: una sola tasa relevante.
-  - `multiple`: más de una tasa relevante; se muestra la más cercana a cero **por convención**, con una alerta. En ese caso decide el VPN.
+- **TIR del inversionista:** tasa interna de retorno del flujo mensual, anualizada como `(1 + tasa mensual)^12 − 1`. **Solo se muestra cuando es única.** El modelo guarda también la raíz mensual (`tirMes`), porque la anualización pierde precisión cerca de −100 %; la interfaz muestra «< −99,9 %» en esos casos, para no confundirlos con la pérdida total. Estados (`tirEstado`):
+  - `ok`: una sola tasa relevante; es la que se muestra.
+  - `multiple`: más de una tasa relevante; no se muestra ninguna («n/d») y una alerta remite al VPN. En proyectos con pérdida alguna de esas tasas puede ser positiva e incluso superar la meta, por lo que elegir una sería engañoso.
   - `sin_recuperacion`: no hay ningún ingreso neto; −100 %.
-  - `sin_inversion`: no hay ningún mes negativo; «n/d».
+  - `sin_inversion`: no hay ningún mes negativo; «n/d». Ocurre con combinaciones extremas de precio alto y costos bajos, cuando el recaudo del primer mes supera la compra del terreno.
   - `sin_raiz`: no se encontró ninguna tasa relevante en el rango de búsqueda; «n/d». No prueba que no exista una fuera de él.
   - **Tasas relevantes:** con utilidad positiva, solo las positivas. El impuesto del último mes crea una raíz a tasa muy negativa en casi todo proyecto rentable; no cambia ninguna decisión con tasas de descuento ≥ 0 y se ignora. Con pérdida cuentan todas, positivas y negativas.
-  - **Rango y resolución:** de −99,9 % a +900 % mensual. La malla tiene paso de 0,05 puntos entre −30 % y +50 % mensual y es más gruesa fuera de esa banda (hasta 4,7 puntos en el extremo superior, y unos 0,7 justo por debajo de −30 %). No se detectan raíces tangentes ni dos raíces dentro de una misma celda; en ese caso puede informarse una tasa sin la alerta de multiplicidad.
-  - El modelo supone un flujo de inversión (primero aportes, después retornos). Con los controles de la interfaz el primer mes siempre es negativo por la compra del terreno.
-- **Monte Carlo y TIR no definida:** las iteraciones sin TIR definida no entran en media, percentiles ni tornado; el contador dice cuántas la tienen. `P(TIR ≥ hurdle)` se calcula sobre el total de iteraciones: una iteración sin TIR cuenta como «no supera la meta».
+  - **Rango y resolución:** de −99,9 % a +900 % mensual. La malla tiene paso de 0,05 puntos entre −30 % y +50 % mensual y es más gruesa fuera de esa banda (hasta 4,7 puntos en el extremo superior, y unos 0,7 justo por debajo de −30 %). No se detectan raíces tangentes ni dos raíces dentro de una misma celda; en ese caso puede mostrarse una tasa que no es única.
+- **Monte Carlo:** informa cuántas iteraciones tienen TIR única, pérdida total, varias tasas o ninguna. Solo las dos primeras entran en media, percentiles, histograma y tornado de la TIR. El tornado ordena por la tasa mensual. `P(TIR ≥ hurdle)` se calcula sobre el total de iteraciones: una sin TIR única cuenta como «no supera la meta». El VPN usa todas las iteraciones con VPN válido. Los rangos de cada variable no pueden superar diez veces el tope de su control.
 - **Payback:** primer mes desde el cual el flujo acumulado ya no vuelve a ser negativo. Un cruce que después se revierte no cuenta.
 - **MOIC:** `(pico de equity + utilidad neta) / pico de equity`. Referencia; la TIR no se deriva de él.
 
