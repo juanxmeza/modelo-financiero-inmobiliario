@@ -38,7 +38,7 @@ Juan pidió corregir «todas, absolutamente todas» las fallas encontradas al pr
 | Tema | Qué se decidió | Qué se descartó o cómo estaba |
 |---|---|---|
 | Ritmo de ventas | El «ritmo pico» es el % real de unidades vendidas por mes; puede quedar inventario sin vender. Valor inicial 12,5 % para que el ejemplo venda todo. (Decisión de Juan.) | Antes las ventas se reescalaban siempre al 100 % y el control no tenía efecto. Descartado: dejar el 100 % fijo y quitar la fila de ritmo; y dejar el inicial en 8 % (vendería 64 %). |
-| Inicio de la preventa | Las ventas arrancan el mes 1 más el retraso. | Antes arrancaban al iniciar la obra, así que la «preventa antes de obra» no vendía nada. **Revisar si esa era la intención.** |
+| Inicio de la preventa | Las ventas arrancan el mes 1 más el retraso. | Antes arrancaban al iniciar la obra, así que la «preventa antes de obra» no vendía nada. Confirmado por Juan el 2026-11-24: la preventa arranca el mes 1. |
 | Ventas tardías | Lo vendido después de la entrega se cobra completo ese mes. Si no queda obra para cuotas, la cuota inicial se cobra con el saldo. | Antes esa cuota inicial se perdía y el saldo se anotaba en un mes anterior a la venta. |
 | Crédito constructor | Solo abre si el punto de equilibrio se alcanza antes de terminar la obra. | Antes se desembolsaba completo aunque no se alcanzara. |
 | Gastos comerciales y administrativos | Sobre lo vendido, tanto en el estado de resultados como en el flujo. | Antes el estado de resultados los cobraba completos. |
