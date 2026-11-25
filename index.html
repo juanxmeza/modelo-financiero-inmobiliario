@@ -205,7 +205,7 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
       <button class="cb" onclick="setCurva('lenta',this)">Lento</button>
       <button class="cb" onclick="setCurva('lineal',this)">Lineal</button>
     </div>
-    <div class="f"><label>Ritmo pico (% unidades/mes) <span class="val" id="v-rpico">8</span>%</label><input type="range" id="rpico" min="1" max="20" step="0.5" value="8"></div>
+    <div class="f"><label>Ritmo pico (% unidades/mes) <span class="val" id="v-rpico">12,5</span>%</label><input type="range" id="rpico" min="1" max="20" step="0.5" value="12.5"></div>
     <div class="f"><label>Mes del pico de ventas <span class="val" id="v-mpico">4</span></label><input type="range" id="mpico" min="1" max="18" step="1" value="4"></div>
     <div class="f"><label>Retraso inicio ventas (meses) <span class="val" id="v-retraso">0</span></label><input type="range" id="retraso" min="0" max="12" step="1" value="0"></div>
   </div>
@@ -228,7 +228,7 @@ td:first-child{text-align:left;color:var(--text-primary);font-weight:500}
 
   <div class="sg">
     <div class="sl"><span class="dot db"></span>Cronograma</div>
-    <div class="f"><label>Duración total proyecto (meses) <span class="val" id="v-dtotal">30</span></label><input type="range" id="dtotal" min="12" max="60" step="1" value="30"></div>
+    <div class="f"><label>Duración total proyecto (meses) <span class="val" id="v-dtotal">30</span></label><input type="range" id="dtotal" min="12" max="72" step="1" value="30"></div>
     <div class="f"><label>Preventa antes de inicio obra (meses) <span class="val" id="v-dprev">4</span></label><input type="range" id="dprev" min="0" max="12" step="1" value="4"></div>
     <div class="f"><label>Duración de obra (meses) <span class="val" id="v-dobra">18</span></label><input type="range" id="dobra" min="6" max="48" step="1" value="18"></div>
   </div>
@@ -455,6 +455,12 @@ function getInp() {
   const sl = Math.max(0, 1 - sp - ci);
   document.getElementById('sal-display').textContent =
     `Separación ${Math.round(sp*100)}% + CI ${Math.round(ci*100)}% + Saldo ${Math.round(sl*100)}% = 100%`;
+  // La duración total no puede ser menor que preventa + obra + 1 mes de entrega: se sube sola
+  const dtEl = document.getElementById('dtotal'), dtMin = Math.round(g('dprev')) + Math.round(g('dobra')) + 1;
+  if (parseFloat(dtEl.value) < dtMin) {
+    dtEl.value = dtMin;
+    const dtLbl = document.getElementById('v-dtotal'); if (dtLbl) dtLbl.textContent = dtMin;
+  }
   return {
     terreno: g('terreno'), pterre: g('pterre'), alib: g('alib')/100,
     pisos: g('pisos'), sotan: g('sotan'), cobsot: g('cobsot')/100,
@@ -496,15 +502,17 @@ function calcFin(inp, prog, pvMult = 1) {
 
 // ── Modelo completo mes a mes (en COP) ───────────────────────────
 function calcModel(inp, prog, fin) {
-  const N      = inp.dtotal;
-  const inicioV = inp.dprev + inp.retraso;
   const finObra = inp.dprev + inp.dobra;
+  // La obra debe terminar dentro del horizonte: al menos un mes para entregar y cancelar el crédito
+  const N       = Math.max(inp.dtotal, finObra + 1);
+  // La preventa arranca el mes 1 (más el retraso), no al inicio de la obra
+  const inicioV = Math.min(inp.retraso, N - 1);
   const mVenta  = Math.max(1, N - inicioV);
 
-  // Absorción
+  // Absorción: el ritmo es el % real de unidades vendidas por mes (antes se reescalaba
+  // siempre al 100 %, y el control de ritmo no tenía efecto). Puede quedar inventario sin vender.
   const rawC  = curvas[curvaActiva](mVenta, inp.rpico, inp.mpico);
-  const totR  = rawC.reduce((a,b) => a+b, 0) || 1;
-  const pctMes = rawC.map(v => Math.min(v/totR, 0.5));
+  const pctMes = rawC.map(v => Math.max(0, v));
   const unidMes = []; let vAcum = 0;
   for (let i = 0; i < N; i++) {
     if (i >= inicioV) { const idx = i - inicioV; const pct = idx < pctMes.length ? pctMes[idx] : 0; const u = Math.max(0, Math.min(pct, 1-vAcum)); unidMes.push(u); vAcum += u; }
@@ -517,11 +525,17 @@ function calcModel(inp, prog, fin) {
     const u = unidMes[i]; if (u <= 0) continue;
     const ingU = fin.ingT * u;
     ingSep[i] += ingU * inp.sepPct;
+    // Venta después de la entrega: el comprador paga el resto en el mismo mes
+    if (i >= finObra) { ingSal[i] += ingU * (inp.ciPct + inp.salPct); continue; }
     const iniCI = i + inp.mesci;
-    const mCI   = Math.max(1, finObra - iniCI);
-    const cuota = (ingU * inp.ciPct) / mCI;
-    for (let j = iniCI; j < finObra && j < N; j++) ingCI[j] += cuota;
-    if (finObra < N) ingSal[finObra] += ingU * inp.salPct;
+    if (iniCI >= finObra) {
+      // No queda obra para cuotas: la cuota inicial se paga con el saldo, a la entrega
+      ingSal[finObra] += ingU * inp.ciPct;
+    } else {
+      const cuota = (ingU * inp.ciPct) / (finObra - iniCI);
+      for (let j = iniCI; j < finObra; j++) ingCI[j] += cuota;
+    }
+    ingSal[finObra] += ingU * inp.salPct;
   }
   const ingPreventaMes = ingSep.map((s,i) => s + ingCI[i]);
   const ingTotalMes    = ingPreventaMes.map((v,i) => v + ingSal[i]);
@@ -533,17 +547,22 @@ function calcModel(inp, prog, fin) {
   // Crédito constructor
   let mesAp = -1; let vAc2 = 0;
   for (let i = 0; i < N; i++) { vAc2 += unidMes[i]; if (vAc2 >= inp.peq && mesAp < 0) mesAp = i; }
-  if (mesAp < 0) mesAp = finObra;
-  const montoCred = fin.cC * inp.pfinc;
+  // El crédito solo abre si el punto de equilibrio de ventas se alcanza antes de terminar la obra.
+  // (Antes se desembolsaba completo aunque no se alcanzara.)
+  const credAbre  = mesAp >= 0 && mesAp < finObra;
+  if (!credAbre) mesAp = -1;
+  const montoCred = credAbre ? fin.cC * inp.pfinc : 0;
   const desemb    = Array(N).fill(0);
-  const mesD = Math.min(Math.max(mesAp, inp.dprev), finObra - 1);
-  const mDisp = Math.max(1, finObra - mesD);
-  const mPT   = montoCred / inp.tramos;
-  const inter = Math.max(1, Math.floor(mDisp / inp.tramos));
-  let tEmit = 0;
-  for (let i = mesD; i < finObra && tEmit < inp.tramos; i += inter) { desemb[i] += mPT; tEmit++; }
-  const totDes = desemb.reduce((a,b)=>a+b,0);
-  if (Math.abs(totDes - montoCred) > 1 && finObra-1 < N) desemb[finObra-1] += (montoCred - totDes);
+  if (credAbre) {
+    const mesD = Math.min(Math.max(mesAp, inp.dprev), finObra - 1);
+    const mDisp = Math.max(1, finObra - mesD);
+    const mPT   = montoCred / inp.tramos;
+    const inter = Math.max(1, Math.floor(mDisp / inp.tramos));
+    let tEmit = 0;
+    for (let i = mesD; i < finObra && tEmit < inp.tramos; i += inter) { desemb[i] += mPT; tEmit++; }
+    const totDes = desemb.reduce((a,b)=>a+b,0);
+    if (Math.abs(totDes - montoCred) > 1) desemb[finObra-1] += (montoCred - totDes);
+  }
 
   // Intereses sobre saldo vigente
   const tMens = inp.tcred / 12;
@@ -560,7 +579,9 @@ function calcModel(inp, prog, fin) {
   // Estado de resultados (se calcula antes del flujo porque el impuesto entra al flujo)
   const ingTot  = ingTotalMes.reduce((a,b)=>a+b,0);
   const uBruta  = ingTot - prog.cT - fin.cC - fin.cI;
-  const uAI     = uBruta - fin.gC - fin.gA - totalInt;
+  // Gastos comerciales y administrativos: solo sobre lo vendido, igual que en el flujo de caja
+  const gC      = fin.gC * vAcum, gA = fin.gA * vAcum;
+  const uAI     = uBruta - gC - gA - totalInt;
   const impM    = Math.max(0, uAI * inp.imp);
   const uN      = uAI - impM;
   const mN      = ingTot > 0 ? uN / ingTot : 0;
@@ -569,8 +590,7 @@ function calcModel(inp, prog, fin) {
   // Pago del crédito: los intereses se capitalizan durante la obra y todo se paga de una vez.
   // No se restan mes a mes (antes se restaban dos veces: cada mes y dentro del saldo final).
   const pagoCred = Array(N).fill(0);
-  if (finObra < N) pagoCred[finObra] = saldoFinal + intMes[finObra];
-  else             pagoCred[N-1]     = saldoCred[N-1];
+  pagoCred[finObra] = saldoFinal + intMes[finObra];
 
   // Egresos totales (caja): terreno, obra, gastos, pago del crédito e impuesto de renta al cierre
   const egMes = Array(N).fill(0);
@@ -601,7 +621,8 @@ function calcModel(inp, prog, fin) {
   return { unidMes, ingSep, ingCI, ingSal, ingPreventaMes, ingTotalMes, entMes, egMes, flujoNeto,
     flujoAcum, egAcum, ingAcum, desemb, desAcum, saldoCred, intMes, equityReq,
     picoEq, mesPico, montoCred, mesAp, totalInt, saldoFinal, payback, vAcum,
-    N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC, tir };
+    N, inicioV, finObra, ingTot, uBruta, uAI, impM, uN, mN, mB, eqInv: picoEq, MOIC, tir,
+    credAbre, gC, gA };
 }
 
 function calcVPN(cf, r) { return cf.reduce((a,v,t) => a + v / Math.pow(1 + r/12, t), 0); }
@@ -625,18 +646,35 @@ function calcTIR(cf) {
   return NaN;
 }
 
+// Reparto LP/GP mes a mes sobre el flujo de caja del proyecto.
+// Los socios aportan, según su participación, solo cuando la caja del proyecto no alcanza (el total
+// aportado es el equity pico). La caja se reparte solo cuando ya no hará falta más adelante (se reserva
+// lo necesario para egresos futuros, como el impuesto final). El reparto va en orden: capital LP,
+// capital GP, retorno preferido LP (acumulado al hurdle), y el resto según el split.
+// (Antes se repartía solo la utilidad, sin devolver el capital, y las TIR salían negativas.)
 function calcWF(inp, m) {
-  const lp = 1 - inp.gppct; const lpC = m.eqInv * lp; const gpC = m.eqInv * inp.gppct;
-  const yrs = inp.dtotal / 12; const hAmt = lpC * (Math.pow(1+inp.hurdle, yrs) - 1);
-  const disp = Math.max(0, m.uN); let r = disp;
-  const dLP = Math.min(r, lpC); r -= dLP;
-  const dGP = Math.min(r, gpC); r -= dGP;
-  const pLP = Math.min(r, hAmt); r -= pLP;
-  const uLP = r * (1 - inp.gpsplit); const uGP = r * inp.gpsplit;
-  const tLP = dLP + pLP + uLP; const tGP = dGP + uGP;
-  const tirLP = lpC > 0 ? Math.pow(tLP/lpC, 1/yrs) - 1 : 0;
-  const tirGP = gpC > 0 ? Math.pow(tGP/gpC, 1/yrs) - 1 : 0;
-  return { lpC, gpC, hAmt, dLP, dGP, pLP, uLP, uGP, tLP, tGP, tirLP, tirGP, disp };
+  const gp = inp.gppct, lp = 1 - gp, rM = Math.pow(1 + inp.hurdle, 1/12) - 1;
+  const n = m.flujoAcum.length, apAc = Array(n), caja = Array(n), repAc = Array(n);
+  let pk = 0; for (let t = 0; t < n; t++) { pk = Math.max(pk, -m.flujoAcum[t]); apAc[t] = pk; caja[t] = m.flujoAcum[t] + pk; }
+  let mn = Infinity; for (let t = n - 1; t >= 0; t--) { mn = Math.min(mn, caja[t]); repAc[t] = Math.max(0, mn); }
+  let balLP = 0, balGP = 0, prefPend = 0;
+  let lpC = 0, gpC = 0, dLP = 0, dGP = 0, pLP = 0, uLP = 0, uGP = 0, hAmt = 0;
+  const fLP = [], fGP = [];
+  for (let t = 0; t < n; t++) {
+    const acc = balLP * rM; prefPend += acc; hAmt += acc;
+    const a = apAc[t] - (t ? apAc[t-1] : 0), f = repAc[t] - (t ? repAc[t-1] : 0); let l = 0, g = 0;
+    if (a > 0) { balLP += a*lp; balGP += a*gp; lpC += a*lp; gpC += a*gp; l = -a*lp; g = -a*gp; }
+    if (f > 0) {
+      let r = f, x;
+      x = Math.min(r, balLP);    balLP -= x;    r -= x; dLP += x; l += x;
+      x = Math.min(r, balGP);    balGP -= x;    r -= x; dGP += x; g += x;
+      x = Math.min(r, prefPend); prefPend -= x; r -= x; pLP += x; l += x;
+      uLP += r*(1 - inp.gpsplit); uGP += r*inp.gpsplit; l += r*(1 - inp.gpsplit); g += r*inp.gpsplit;
+    }
+    fLP.push(l); fGP.push(g);
+  }
+  const tLP = dLP + pLP + uLP, tGP = dGP + uGP, disp = tLP + tGP;
+  return { lpC, gpC, hAmt, dLP, dGP, pLP, uLP, uGP, tLP, tGP, tirLP: calcTIR(fLP), tirGP: calcTIR(fGP), disp, fLP, fGP };
 }
 
 // ── Charts ────────────────────────────────────────────────────────
@@ -711,7 +749,7 @@ function renderCredPanel(inp, prog, fin, m) {
     {n:m.payback?'Mes '+m.payback:'—', l:'Payback equity inversionistas'}
   ].map(p=>`<div class="ph"><div class="ph-num">${p.n}</div><div class="ph-label">${p.l}</div></div>`).join('');
 
-  const ok = m.vAcum >= inp.peq;
+  const ok = m.credAbre;
   document.getElementById('cred-nota').textContent = ok
     ? `PEQ alcanzado en mes ${m.mesAp+1} con ${fP(m.vAcum*100)} de unidades vendidas. Crédito desembolsado en ${inp.tramos} tramos desde ese mes hasta fin de obra.`
     : `ATENCIÓN: absorción proyectada ${fP(m.vAcum*100)} no alcanza el PEQ del ${fP(inp.peq*100)}. El banco no abrirá el crédito. El proyecto debe financiarse 100% con equity.`;
@@ -725,7 +763,7 @@ function renderKPIs(inp, m) {
   document.getElementById('k-vpn').textContent  = fM(calcVPN(m.flujoNeto, inp.tvpn));
   document.getElementById('k-vpns').textContent = '@ ' + fP(inp.tvpn*100);
   document.getElementById('k-cred').textContent = fM(m.montoCred);
-  document.getElementById('k-cred-sub').textContent = m.vAcum >= inp.peq ? 'PEQ ✓ Mes '+(m.mesAp+1) : 'PEQ no alcanzado ✗';
+  document.getElementById('k-cred-sub').textContent = m.credAbre ? 'PEQ ✓ Mes '+(m.mesAp+1) : 'PEQ no alcanzado ✗';
   document.getElementById('k-pico').textContent = fM(m.picoEq);
   document.getElementById('k-pico-mes').textContent = 'Mes ' + m.mesPico;
   document.getElementById('k-pb').textContent = m.payback ? 'Mes '+m.payback : 'No alcanza';
@@ -733,7 +771,7 @@ function renderKPIs(inp, m) {
 
 function renderBanner(inp, m, fin) {
   const ratio = fin.cTP > 0 ? m.picoEq / fin.cTP : 0;
-  const ok    = m.vAcum >= inp.peq;
+  const ok    = m.credAbre;
   let cls, title, body;
   if (!ok) {
     cls='pb-red'; title='Crédito constructor no se abre — absorción insuficiente';
@@ -751,7 +789,7 @@ function renderBanner(inp, m, fin) {
 function renderAlerts(inp, m, fin) {
   const tir = m.tir;
   const al = [];
-  if (m.vAcum < inp.peq) al.push({t:'red',   m:`Absorción (${fP(m.vAcum*100)}) insuficiente para abrir crédito constructor. El proyecto debe financiarse 100% con equity.`, f:''});
+  if (!m.credAbre) al.push({t:'red',   m:`Absorción (${fP(m.vAcum*100)}) insuficiente para abrir crédito constructor. El proyecto debe financiarse 100% con equity.`, f:''});
   if (tir < 0)           al.push({t:'red',   m:`TIR negativa (${fP(tir*100)}). El proyecto destruye valor incluyendo el costo de la deuda.`, f:'Ajusta precios o reduce costos directos.'});
   else if (tir < inp.hurdle) al.push({t:'amber', m:`TIR (${fP(tir*100)}) por debajo del hurdle LP (${fP(inp.hurdle*100)}).`, f:'El LP no alcanza su retorno preferido.'});
   if (m.totalInt > fin.cC * 0.15) al.push({t:'amber', m:`Intereses del crédito constructor (${fM(m.totalInt)}) superan el 15% del costo directo.`, f:'Negocia mejor tasa o reduce el plazo de obra.'});
@@ -779,8 +817,8 @@ function renderER(inp, prog, fin, m) {
     erRow('Costo directo construcción', -fin.cC, 0, 1) +
     erRow('Costos indirectos', -fin.cI, 0, 1) +
     erRow('Utilidad bruta', m.uBruta, 1) +
-    erRow('Gastos comerciales', -fin.gC, 0, 1) +
-    erRow('Gastos administrativos', -fin.gA, 0, 1) +
+    erRow('Gastos comerciales', -m.gC, 0, 1) +
+    erRow('Gastos administrativos', -m.gA, 0, 1) +
     erRow('Intereses crédito constructor', -m.totalInt, 0, 1) +
     erRow('Utilidad antes de impuestos', m.uAI, 1) +
     erRow('Impuesto a la renta', -m.impM, 0, 1) +
@@ -832,7 +870,7 @@ function renderSens(inp, prog) {
     h += `<tr><td>${r>=0?'+':''}${Math.round(r*100)}% ritmo</td>`;
     pd.forEach(p => {
       const f2 = calcFin(inp, prog, 1+p);
-      const m2 = calcModel(inp, prog, f2);
+      const m2 = calcModel(Object.assign({}, inp, { rpico: inp.rpico * (1+r) }), prog, f2);
       const tir = m2.tir;
       const c = tir > inp.hurdle ? 'sg2' : tir > 0 ? 'sm2' : 'sb2';
       h += `<td><span class="sc-cell ${c}">${fP(tir*100)}</span></td>`;
@@ -863,7 +901,7 @@ function renderScen(inp, prog, m) {
       ${sr('Pico equity', fM(m2.picoEq))}
       ${sr('TIR LP', fP(wf2.tirLP*100))}
       ${sr('TIR GP', fP(wf2.tirGP*100))}
-      ${sr('PEQ alcanzado', m2.vAcum >= inp.peq ? 'Sí ✓' : 'No ✗')}
+      ${sr('PEQ alcanzado', m2.credAbre ? 'Sí ✓' : 'No ✗')}
       <span class="badge b${viable}">${vl}</span></div>`;
   });
   document.getElementById('scen-content').innerHTML = h + '</div>';
